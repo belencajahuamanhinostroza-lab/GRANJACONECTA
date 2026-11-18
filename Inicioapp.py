@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 BASE_DIR = Path(__file__).resolve().parent
-IMAGE_PATH = BASE_DIR / "assets" / "fondogranja.jpg"
+IMAGE_PATH = BASE_DIR / "fondogranja.jpg"
 
 
 # =====================================================
