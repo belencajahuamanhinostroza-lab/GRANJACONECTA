@@ -1,73 +1,68 @@
 
 import streamlit as st
-from pathlib import Path
 import base64
+from pathlib import Path
+import mimetypes
 
-# =====================================================
-# CONFIGURACIÓN
-# =====================================================
+# ==========================================
+# CONFIGURACIÓN GENERAL
+# ==========================================
 
 st.set_page_config(
     page_title="GranjaConecta",
     page_icon="🌱",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-BASE_DIR = Path(__file__).resolve().parent
-IMAGE_PATH = BASE_DIR / "fondogranja.jpg"
+# ==========================================
+# CARGA DE LA IMAGEN DE PORTADA
+# ==========================================
 
-
-# =====================================================
-# CARGAR IMAGEN
-# =====================================================
+RUTA_IMAGEN = Path(__file__).parent / "fondogranja.jpg"
 
 def cargar_imagen(ruta):
     if ruta.exists():
         with open(ruta, "rb") as archivo:
-            return base64.b64encode(archivo.read()).decode()
+            imagen = base64.b64encode(archivo.read()).decode()
+
+        tipo, _ = mimetypes.guess_type(str(ruta))
+
+        if tipo is None:
+            tipo = "image/jpeg"
+
+        return f"data:{tipo};base64,{imagen}"
+
     return None
 
 
-imagen = cargar_imagen(IMAGE_PATH)
+imagen_fondo = cargar_imagen(RUTA_IMAGEN)
 
-
-# =====================================================
-# ESTILOS
-# =====================================================
+# ==========================================
+# ESTILOS CSS
+# ==========================================
 
 st.markdown("""
 <style>
 
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 
-:root {
-    --verde-oscuro: #063C2E;
-    --verde-medio: #176344;
-    --verde-lima: #B8E36B;
-    --verde-menta: #E9F6EE;
-    --texto: #183D30;
-}
-
-/* FONDO GENERAL */
-
-.stApp {
-    background: #F1F8F2;
-    font-family: 'DM Sans', sans-serif;
-}
-
-.block-container {
-    max-width: 1250px;
-    padding: 1.5rem 2.5rem 4rem 2.5rem;
-}
-
-/* TIPOGRAFÍA */
+/* CONFIGURACIÓN GENERAL */
 
 html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Manrope', sans-serif !important;
 }
 
-/* OCULTAR ELEMENTOS */
+.stApp {
+    background: linear-gradient(
+        180deg,
+        #F1F9F3 0%,
+        #EAF5ED 100%
+    );
+    color: #123D2D;
+}
+
+/* OCULTAR ELEMENTOS INNECESARIOS */
 
 #MainMenu {
     visibility: hidden;
@@ -77,77 +72,52 @@ footer {
     visibility: hidden;
 }
 
-header[data-testid="stHeader"] {
-    background: transparent;
+header {
+    background: transparent !important;
 }
 
-/* BARRA LATERAL */
+/* ESPACIADO GENERAL */
 
-section[data-testid="stSidebar"] {
-    background: linear-gradient(
-        180deg,
-        #052F25 0%,
-        #07513A 55%,
-        #0B6946 100%
-    );
-}
-
-section[data-testid="stSidebar"] * {
-    color: #F1FFF5 !important;
-}
-
-section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
-    color: #D6F1DF !important;
-}
-
-/* EXPANDERS Y ELEMENTOS DESPLEGABLES */
-
-div[data-testid="stExpander"] {
-    background: linear-gradient(
-        135deg,
-        #063C2E,
-        #0B6848
-    );
-    border: 1px solid #397D5B;
-    border-radius: 12px;
-    color: white;
-}
-
-div[data-testid="stExpander"] summary {
-    color: white !important;
-    font-weight: 700;
-}
-
-div[data-testid="stExpander"] summary p {
-    color: white !important;
+.block-container {
+    max-width: 1250px;
+    padding-top: 2rem;
+    padding-bottom: 4rem;
 }
 
 /* MARCA SUPERIOR */
 
 .brand {
-    color: #174D37;
-    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #103D2C;
+    font-size: 17px;
     font-weight: 800;
-    letter-spacing: 2px;
+    letter-spacing: 1.5px;
+    margin-bottom: 30px;
 }
 
-/* HERO */
+.brand-symbol {
+    color: #67A94E;
+    font-size: 25px;
+}
+
+/* PORTADA */
 
 .hero {
     width: 100%;
-    min-height: 390px;
-    border-radius: 18px;
-    background-position: center 52%;
+    min-height: 440px;
+    border-radius: 24px;
+    background-position: center;
     background-size: cover;
+    background-repeat: no-repeat;
     display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    align-items: flex-start;
-    padding: 45px 55px;
+    align-items: center;
+    padding: 55px;
     box-sizing: border-box;
-    overflow: hidden;
     position: relative;
-    box-shadow: 0 15px 40px rgba(4, 53, 37, 0.18);
+    overflow: hidden;
+    box-shadow: 0 15px 40px rgba(3, 49, 34, 0.16);
 }
 
 .hero::before {
@@ -156,149 +126,219 @@ div[data-testid="stExpander"] summary p {
     inset: 0;
     background: linear-gradient(
         90deg,
-        rgba(2, 38, 29, 0.78) 0%,
-        rgba(2, 45, 32, 0.38) 55%,
-        rgba(2, 45, 32, 0.05) 100%
+        rgba(2, 35, 27, 0.88) 0%,
+        rgba(2, 49, 34, 0.70) 43%,
+        rgba(2, 49, 34, 0.12) 100%
     );
 }
 
 .hero-content {
     position: relative;
-    z-index: 1;
-    max-width: 650px;
+    z-index: 2;
+    max-width: 660px;
 }
 
 .hero-label {
-    color: #D5F4C0;
-    font-size: 11px;
+    color: #C7F29B;
+    font-size: 12px;
     font-weight: 800;
     letter-spacing: 4px;
-    margin-bottom: 12px;
+    margin-bottom: 20px;
+    text-transform: uppercase;
 }
 
 .hero-title {
     color: #FFFFFF;
-    font-size: clamp(42px, 6vw, 76px);
+    font-family: 'Manrope', sans-serif;
+    font-size: clamp(46px, 6vw, 76px);
     font-weight: 800;
-    line-height: 1.05;
-    letter-spacing: -2px;
+    line-height: 1.08;
+    letter-spacing: -3px;
     margin: 0;
 }
 
 .hero-description {
-    color: #F0FFF3;
-    font-size: 15px;
-    line-height: 1.8;
-    margin-top: 17px;
-    max-width: 520px;
+    color: #F0FFF4;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.9;
+    margin-top: 22px;
+    max-width: 530px;
 }
 
-/* SECCIÓN DE INFORMACIÓN */
+.hero-line {
+    width: 65px;
+    height: 4px;
+    background: #BDEB79;
+    border-radius: 10px;
+    margin-top: 25px;
+}
+
+.hero-small {
+    color: #D3EBDD;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    margin-top: 18px;
+}
+
+/* SECCIÓN DE ACCESO */
+
+.access-section {
+    margin-top: 55px;
+    margin-bottom: 25px;
+}
 
 .section-label {
-    color: #43805C;
+    color: #54865D;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+
+.section-title {
+    color: #103F2E;
+    font-size: clamp(27px, 3vw, 37px);
+    font-weight: 800;
+    letter-spacing: -1.3px;
+    line-height: 1.3;
+    margin-bottom: 10px;
+}
+
+.section-description {
+    color: #60796A;
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.8;
+}
+
+/* TARJETAS */
+
+.control-card {
+    background: linear-gradient(
+        145deg,
+        #06392C 0%,
+        #07533B 48%,
+        #11714A 100%
+    );
+    border: 1px solid rgba(193, 235, 169, 0.20);
+    border-radius: 21px;
+    padding: 30px;
+    min-height: 300px;
+    box-shadow: 0 12px 30px rgba(3, 52, 36, 0.15);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.control-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 18px 38px rgba(3, 52, 36, 0.22);
+}
+
+.card-number {
+    color: #BDEB8B;
     font-size: 11px;
     font-weight: 800;
     letter-spacing: 3px;
 }
 
-.section-title {
-    color: #103E2E;
-    font-size: 34px;
-    font-weight: 800;
-    letter-spacing: -1px;
-    line-height: 1.2;
-}
-
-.section-description {
-    color: #587263;
-    font-size: 14px;
-    line-height: 1.9;
-}
-
-/* TARJETAS */
-
-div[data-testid="stVerticalBlockBorderWrapper"] {
-    background: #FFFFFF;
-    border: 1px solid #DCECE0;
-    border-radius: 15px;
-    padding: 22px;
-    box-shadow: 0 8px 25px rgba(12, 65, 41, 0.06);
-}
-
-.card-number {
-    color: #7AAB87;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 2px;
+.card-icon {
+    font-size: 39px;
+    margin-top: 23px;
+    margin-bottom: 12px;
 }
 
 .card-heading {
-    color: #123F2E;
-    font-size: 26px;
+    color: #FFFFFF;
+    font-size: 28px;
     font-weight: 800;
-    margin-top: 8px;
+    letter-spacing: -0.8px;
+    margin-bottom: 12px;
 }
 
 .card-description {
-    color: #607568;
-    font-size: 13px;
-    line-height: 1.8;
-    min-height: 75px;
+    color: #DCEFE3;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.9;
+    min-height: 80px;
+    margin-bottom: 22px;
 }
 
-/* BOTONES STREAMLIT */
-
-.stButton > button,
-.stPageLink > a {
-    background: #B8E36B !important;
-    color: #123C2A !important;
-    border: none !important;
-    border-radius: 8px !important;
-    min-height: 46px;
-    font-size: 12px !important;
-    font-weight: 800 !important;
+.card-tag {
+    display: inline-block;
+    background: rgba(190, 235, 139, 0.15);
+    color: #D6F5B3;
+    border: 1px solid rgba(190, 235, 139, 0.3);
+    border-radius: 30px;
+    padding: 7px 13px;
+    font-size: 10px;
+    font-weight: 800;
     letter-spacing: 1px;
-    transition: all 0.2s ease;
 }
 
-.stButton > button:hover,
-.stPageLink > a:hover {
-    background: #174F37 !important;
-    color: white !important;
+/* BOTONES DE NAVEGACIÓN */
+
+.stPageLink a {
+    background: #C1EB7C !important;
+    color: #123D2B !important;
     border: none !important;
+    border-radius: 10px !important;
+    font-family: 'Manrope', sans-serif !important;
+    font-weight: 800 !important;
+    font-size: 13px !important;
+    min-height: 48px;
+    transition: all 0.2s ease;
+    justify-content: center !important;
+}
+
+.stPageLink a:hover {
+    background: #A9DE68 !important;
+    color: #06392C !important;
     transform: translateY(-2px);
 }
 
-/* PIE */
+/* PIE DE PÁGINA */
 
 .footer {
-    color: #6E8B79;
-    font-size: 11px;
-    letter-spacing: 1px;
+    border-top: 1px solid #D6E7D9;
+    margin-top: 65px;
+    padding-top: 22px;
     text-align: center;
-    padding-top: 25px;
+    color: #789080;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
 }
 
-/* RESPONSIVE */
+/* DISEÑO RESPONSIVE */
 
-@media (max-width: 768px) {
+@media(max-width: 768px) {
+
     .block-container {
-        padding: 1rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
     }
 
     .hero {
-        min-height: 330px;
+        min-height: 370px;
         padding: 25px;
         background-position: center;
     }
 
     .hero-title {
-        font-size: 43px;
+        font-size: 44px;
+        letter-spacing: -2px;
     }
 
     .hero-description {
         font-size: 13px;
+    }
+
+    .control-card {
+        padding: 24px;
+        min-height: 280px;
     }
 
     .section-title {
@@ -310,258 +350,220 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
 """, unsafe_allow_html=True)
 
 
-# =====================================================
-# BARRA LATERAL
-# =====================================================
+# ==========================================
+# MARCA
+# ==========================================
 
-with st.sidebar:
-
-    st.markdown("## ✳ GRANJACONECTA")
-    st.caption("TECNOLOGÍA PARA EL CAMPO")
-
-    st.divider()
-
-    st.markdown("### Navegación")
-
-    st.page_link(
-        "Inicioapp.py",
-        label="Inicio",
-        icon="🏠"
-    )
-
-    st.page_link(
-        "pages/1_Bebedero.py",
-        label="Bebedero",
-        icon="💧"
-    )
-
-    st.page_link(
-        "pages/2_Corral.py",
-        label="Corral",
-        icon="🐄"
-    )
-
-    st.divider()
-
-    with st.expander("Acerca del proyecto"):
-
-        st.write(
-            "GranjaConecta integra sensores, automatización "
-            "y reconocimiento de gestos para apoyar el "
-            "bienestar animal."
-        )
-
-    st.caption("INNOVACIÓN · CONTROL · BIENESTAR")
+st.markdown("""
+<div class="brand">
+    <span class="brand-symbol">✳</span>
+    GRANJACONECTA
+</div>
+""", unsafe_allow_html=True)
 
 
-# =====================================================
-# ENCABEZADO
-# =====================================================
+# ==========================================
+# PORTADA PRINCIPAL
+# ==========================================
 
-st.markdown(
-    '<p class="brand">✳ GRANJACONECTA</p>',
-    unsafe_allow_html=True
-)
+if imagen_fondo:
 
-st.write("")
+    st.markdown(f"""
+    <div class="hero"
+        style="background-image: url('{imagen_fondo}');">
 
+        <div class="hero-content">
 
-# =====================================================
-# PORTADA CON IMAGEN Y TÍTULO
-# =====================================================
-
-if imagen:
-
-    st.markdown(
-        f"""
-        <div class="hero"
-        style="background-image:
-        url('data:image/jpeg;base64,{imagen}');">
-
-            <div class="hero-content">
-
-                <div class="hero-label">
-                    TECNOLOGÍA PARA EL CAMPO
-                </div>
-
-                <h1 class="hero-title">
-                    GranjaConecta
-                </h1>
-
-                <div class="hero-description">
-                    Conectamos la tecnología con el bienestar animal.
-                    Una granja inteligente donde el monitoreo y la
-                    automatización facilitan el cuidado diario.
-                </div>
-
+            <div class="hero-label">
+                TECNOLOGÍA PARA EL CAMPO
             </div>
+
+            <h1 class="hero-title">
+                GranjaConecta
+            </h1>
+
+            <div class="hero-description">
+                Conectamos la tecnología con el bienestar animal.
+                Una granja inteligente donde el monitoreo y la
+                automatización facilitan el cuidado diario.
+            </div>
+
+            <div class="hero-line"></div>
+
+            <div class="hero-small">
+                INNOVACIÓN · CONTROL · BIENESTAR ANIMAL
+            </div>
+
         </div>
-        """,
-        unsafe_allow_html=True
-    )
+    </div>
+    """, unsafe_allow_html=True)
 
 else:
 
     st.warning(
         "No se encontró fondogranja.jpg. "
-        "Coloca la imagen junto a Inicioapp.py."
+        "Coloca la imagen en la raíz del repositorio, "
+        "junto a Inicioapp.py."
     )
 
+    st.markdown("""
+    <div class="hero" style="
+        background: linear-gradient(
+            120deg,
+            #06392C,
+            #11714A
+        );">
 
-# =====================================================
-# INFORMACIÓN DEL PROYECTO
-# =====================================================
+        <div class="hero-content">
 
-st.write("")
-st.write("")
+            <div class="hero-label">
+                TECNOLOGÍA PARA EL CAMPO
+            </div>
 
-st.markdown(
-    '<p class="section-label">NUESTRA PROPUESTA</p>',
-    unsafe_allow_html=True
-)
+            <h1 class="hero-title">
+                GranjaConecta
+            </h1>
 
-st.markdown(
-    '<p class="section-title">Una granja conectada, '
-    'un cuidado más inteligente.</p>',
-    unsafe_allow_html=True
-)
+            <div class="hero-description">
+                Conectamos la tecnología con el bienestar animal.
+                Una granja inteligente donde el monitoreo y la
+                automatización facilitan el cuidado diario.
+            </div>
 
-st.markdown(
-    """
-    <p class="section-description">
-    GranjaConecta es una propuesta de monitoreo y automatización
-    que integra tecnología IoT para mejorar la supervisión de
-    espacios importantes de una granja.<br><br>
-    Mediante sensores y controles inteligentes, permite consultar
-    las condiciones del bebedero y gestionar funciones del corral,
-    facilitando el cuidado de los animales.
-    </p>
-    """,
-    unsafe_allow_html=True
-)
+            <div class="hero-line"></div>
+
+            <div class="hero-small">
+                INNOVACIÓN · CONTROL · BIENESTAR ANIMAL
+            </div>
+
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
-# =====================================================
-# DOS ÁREAS DE LA APLICACIÓN
-# =====================================================
+# ==========================================
+# SECCIÓN DE ACCESO A LAS ÁREAS
+# ==========================================
 
-st.write("")
-st.write("")
+st.markdown("""
+<div class="access-section">
 
-st.markdown(
-    '<p class="section-label">EXPLORA TU GRANJA</p>',
-    unsafe_allow_html=True
-)
+    <div class="section-label">
+        EXPLORA TU GRANJA
+    </div>
 
-st.markdown(
-    '<p class="section-title">Dos áreas, un mismo propósito.</p>',
-    unsafe_allow_html=True
-)
+    <div class="section-title">
+        Dos áreas, un mismo propósito.
+    </div>
 
-st.markdown(
-    '<p class="section-description">'
-    'Selecciona el espacio que deseas supervisar y controlar.'
-    '</p>',
-    unsafe_allow_html=True
-)
+    <div class="section-description">
+        Selecciona el espacio que deseas supervisar y controlar.
+        Cada área cuenta con herramientas diseñadas para facilitar
+        el cuidado y la automatización de la granja.
+    </div>
 
-st.write("")
+</div>
+""", unsafe_allow_html=True)
+
+
+# ==========================================
+# TARJETAS DE CONTROL
+# ==========================================
 
 col1, col2 = st.columns(2, gap="large")
 
 
-# =====================================================
-# TARJETA CORRAL
-# =====================================================
+# ---------- CORRAL ----------
 
 with col1:
 
-    with st.container(border=True):
+    st.markdown("""
+    <div class="control-card">
 
-        st.markdown(
-            '<p class="card-number">01 / CONTROL ANIMAL</p>',
-            unsafe_allow_html=True
-        )
+        <div class="card-number">
+            01 / CONTROL ANIMAL
+        </div>
 
-        st.markdown("## 🐄")
+        <div class="card-icon">
+            🐄
+        </div>
 
-        st.markdown(
-            '<p class="card-heading">El Corral</p>',
-            unsafe_allow_html=True
-        )
+        <div class="card-heading">
+            El Corral
+        </div>
 
-        st.markdown(
-            """
-            <p class="card-description">
-            Supervisa el acceso al corral mediante el control
-            de la puerta y la ventilación. Utiliza reconocimiento
-            de gestos para ejecutar las acciones.
-            </p>
-            """,
-            unsafe_allow_html=True
-        )
+        <div class="card-description">
+            Supervisa y controla el espacio del ganado.
+            Gestiona la apertura y cierre de la puerta,
+            y regula la ventilación mediante reconocimiento
+            de gestos.
+        </div>
 
-        st.page_link(
-            "pages/2_Corral.py",
-            label="INGRESAR AL CORRAL  →",
-            use_container_width=True
-        )
+        <div class="card-tag">
+            GESTOS · AUTOMATIZACIÓN
+        </div>
+
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.write("")
+
+    st.page_link(
+        "pages/2_Corral.py",
+        label="INGRESAR AL CORRAL  →",
+        use_container_width=True
+    )
 
 
-# =====================================================
-# TARJETA BEBEDERO
-# =====================================================
+# ---------- BEBEDERO ----------
 
 with col2:
 
-    with st.container(border=True):
+    st.markdown("""
+    <div class="control-card">
 
-        st.markdown(
-            '<p class="card-number">02 / CONTROL HÍDRICO</p>',
-            unsafe_allow_html=True
-        )
+        <div class="card-number">
+            02 / CONTROL HÍDRICO
+        </div>
 
-        st.markdown("## 💧")
+        <div class="card-icon">
+            💧
+        </div>
 
-        st.markdown(
-            '<p class="card-heading">El Bebedero</p>',
-            unsafe_allow_html=True
-        )
+        <div class="card-heading">
+            El Bebedero
+        </div>
 
-        st.markdown(
-            """
-            <p class="card-description">
-            Consulta el nivel de agua, la temperatura y la
-            humedad. Controla la apertura y el cierre de la
-            válvula mediante comandos de voz o texto.
-            </p>
-            """,
-            unsafe_allow_html=True
-        )
+        <div class="card-description">
+            Monitorea el nivel de agua, la temperatura
+            y la humedad. Controla la válvula de suministro
+            mediante comandos de voz o texto.
+        </div>
 
-        st.page_link(
-            "pages/1_Bebedero.py",
-            label="INGRESAR AL BEBEDERO  →",
-            use_container_width=True
-        )
+        <div class="card-tag">
+            VOZ · MONITOREO · SENSORES
+        </div>
 
-
-# =====================================================
-# PIE DE PÁGINA
-# =====================================================
-
-st.write("")
-st.write("")
-
-st.markdown(
-    """
-    <div class="footer">
-        ✳ GRANJACONECTA
-        <br><br>
-        Tecnología al servicio del bienestar animal.
-        <br>
-        INNOVACIÓN · CONTROL · BIENESTAR
     </div>
-    """,
-    unsafe_allow_html=True
-)
+    """, unsafe_allow_html=True)
+
+    st.write("")
+
+    st.page_link(
+        "pages/1_Bebedero.py",
+        label="INGRESAR AL BEBEDERO  →",
+        use_container_width=True
+    )
+
+
+# ==========================================
+# PIE DE PÁGINA
+# ==========================================
+
+st.markdown("""
+<div class="footer">
+    GRANJACONECTA · INNOVACIÓN PARA EL BIENESTAR ANIMAL
+    <br><br>
+    MONITOREO · AUTOMATIZACIÓN · TECNOLOGÍA
+</div>
+""", unsafe_allow_html=True)
