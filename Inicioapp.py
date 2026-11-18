@@ -4,7 +4,7 @@ from pathlib import Path
 import base64
 
 # =====================================================
-# CONFIGURACIÓN
+# CONFIGURACIÓN GENERAL
 # =====================================================
 
 st.set_page_config(
@@ -14,6 +14,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# La imagen está en la raíz del repositorio,
+# al mismo nivel que Inicioapp.py.
 BASE_DIR = Path(__file__).resolve().parent
 IMAGE_PATH = BASE_DIR / "fondogranja.jpg"
 
@@ -23,296 +25,331 @@ IMAGE_PATH = BASE_DIR / "fondogranja.jpg"
 # =====================================================
 
 def cargar_fondo(ruta):
-    if ruta.exists():
-        with open(ruta, "rb") as imagen:
-            contenido = base64.b64encode(imagen.read()).decode()
-        return f"data:image/jpeg;base64,{contenido}"
-    return None
+    """Convierte la imagen local a Base64 para usarla en CSS."""
+    if not ruta.is_file():
+        return None
+
+    with ruta.open("rb") as archivo:
+        imagen_base64 = base64.b64encode(
+            archivo.read()
+        ).decode("utf-8")
+
+    extension = ruta.suffix.lower()
+    mime_type = (
+        "image/png"
+        if extension == ".png"
+        else "image/jpeg"
+    )
+
+    return f"data:{mime_type};base64,{imagen_base64}"
 
 
 fondo = cargar_fondo(IMAGE_PATH)
 
 
 # =====================================================
-# ESTILOS
+# ESTILOS DE LA APLICACIÓN
 # =====================================================
 
-if fondo:
-
-    st.markdown(f"""
+st.markdown(
+    """
     <style>
 
-    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
+    @import url(
+        'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap'
+    );
 
-    .stApp {{
-        background-color: #EAF7EF;
+    html, body, [class*="css"] {
         font-family: 'DM Sans', sans-serif;
-    }}
+    }
 
-    .block-container {{
+    .stApp {
+        background: #EAF7EF;
+        color: #173F2B;
+    }
+
+    .block-container {
         max-width: 1350px;
-        padding: 1rem 2rem 3rem 2rem;
-    }}
+        padding: 1.2rem 2rem 2.5rem 2rem;
+    }
 
-    /* PORTADA CON IMAGEN */
+    /* PORTADA PRINCIPAL */
 
-    .hero {{
-        background-image:
-            linear-gradient(
-                to bottom,
-                rgba(218, 247, 231, 0.08) 0%,
-                rgba(218, 247, 231, 0.03) 35%,
-                rgba(2, 48, 35, 0.18) 100%
-            ),
-            url("{fondo}");
-
+    .hero {
+        min-height: 760px;
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 22px;
+        overflow: hidden;
+        padding: 62px 24px 40px 24px;
+        text-align: center;
+        background-color: #CFF0DF;
         background-size: cover;
         background-position: center 42%;
         background-repeat: no-repeat;
-
-        min-height: 790px;
-        border-radius: 22px;
-        position: relative;
-        overflow: hidden;
-
         display: flex;
-        flex-direction: column;
-        align-items: center;
         justify-content: flex-start;
+        align-items: flex-start;
+    }
 
-        padding: 65px 25px 40px 25px;
-        text-align: center;
-        box-shadow: 0 12px 35px rgba(17, 64, 43, 0.10);
-    }}
-
-    .hero-content {{
+    .hero-content {
+        width: 100%;
         max-width: 850px;
         margin: 0 auto;
-        position: relative;
-        z-index: 2;
-    }}
+    }
 
-    .brand-small {{
+    .brand-small {
         color: #24563A;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 800;
-        letter-spacing: 4px;
+        letter-spacing: 3px;
         text-transform: uppercase;
-        margin-bottom: 32px;
-    }}
+        margin-bottom: 28px;
+    }
 
-    .hero h1 {{
+    .hero h1 {
         font-family: 'Playfair Display', serif;
         color: #104331;
         font-size: clamp(42px, 6vw, 76px);
         font-weight: 700;
         line-height: 1.08;
-        margin-bottom: 18px;
-        text-shadow: 0 2px 12px rgba(255,255,255,0.18);
-    }}
+        margin: 0 0 18px 0;
+    }
 
-    .hero-description {{
+    .hero-description {
         color: #24563F;
-        font-size: 17px;
+        font-size: 16px;
         font-weight: 600;
         line-height: 1.8;
         max-width: 690px;
         margin: 0 auto;
-    }}
+    }
 
-    .hero-tag {{
+    .hero-tag {
         display: inline-block;
-        margin-top: 25px;
-        padding: 9px 18px;
+        margin-top: 24px;
+        padding: 9px 17px;
         border-radius: 30px;
-        background: rgba(255,255,255,0.55);
+        background: rgba(255,255,255,0.62);
         color: #24563A;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 800;
-        letter-spacing: 1.5px;
-        border: 1px solid rgba(255,255,255,0.65);
-    }}
+        letter-spacing: 1.3px;
+        border: 1px solid rgba(255,255,255,0.7);
+    }
 
     /* SECCIÓN DE ACCESOS */
 
-    .access-section {{
+    .access-section {
         text-align: center;
-        padding: 45px 10px 15px 10px;
-    }}
+        padding: 42px 10px 18px 10px;
+    }
 
-    .access-section h2 {{
+    .access-section h2 {
         font-family: 'Playfair Display', serif;
         color: #16452E;
-        font-size: 36px;
+        font-size: 35px;
         font-weight: 700;
-        margin-bottom: 8px;
-    }}
+        margin: 0 0 8px 0;
+    }
 
-    .access-section p {{
+    .access-section p {
         color: #687D6D;
-        font-size: 15px;
-        margin-bottom: 10px;
-    }}
+        font-size: 14px;
+        margin: 0;
+    }
 
     /* TARJETAS */
 
-    div[data-testid="stVerticalBlockBorderWrapper"] {{
+    div[data-testid="stVerticalBlockBorderWrapper"] {
         background: #FFFFFF;
         border: 1px solid #DCEBDD;
-        border-radius: 19px;
-        padding: 23px;
+        border-radius: 18px;
+        padding: 22px;
         box-shadow: 0 7px 22px rgba(25, 73, 45, 0.06);
-    }}
+    }
 
-    .card-icon {{
-        font-size: 37px;
-        margin-bottom: 10px;
-    }}
-
-    .card-title {{
-        color: #19472F;
-        font-size: 23px;
-        font-weight: 800;
+    .card-icon {
+        font-size: 36px;
         margin-bottom: 9px;
-    }}
+    }
 
-    .card-text {{
-        color: #718174;
-        font-size: 14px;
-        line-height: 1.7;
-        min-height: 75px;
-    }}
-
-    /* BOTONES DE NAVEGACIÓN */
-
-    div[data-testid="stPageLink"] a {{
-        background-color: #24583A;
-        color: #FFFFFF !important;
-        border-radius: 11px;
-        border: none;
-        padding: 13px 18px;
+    .card-title {
+        color: #19472F;
+        font-size: 22px;
         font-weight: 800;
-        text-align: center;
-        transition: 0.2s;
-    }}
+        margin-bottom: 8px;
+    }
 
-    div[data-testid="stPageLink"] a:hover {{
-        background-color: #B5DD65;
+    .card-text {
+        color: #718174;
+        font-size: 13px;
+        line-height: 1.7;
+        min-height: 72px;
+        margin-bottom: 15px;
+    }
+
+    /* BOTONES */
+
+    div[data-testid="stPageLink"] a {
+        background: #24583A;
+        color: #FFFFFF !important;
+        border-radius: 10px;
+        border: none;
+        padding: 12px 16px;
+        font-weight: 800;
+        text-decoration: none;
+    }
+
+    div[data-testid="stPageLink"] a:hover {
+        background: #B5DD65;
         color: #183D27 !important;
-    }}
+    }
 
-    /* PIE */
+    /* PIE DE PÁGINA */
 
-    .footer {{
+    .footer {
         text-align: center;
-        padding: 30px 10px 10px;
+        padding: 28px 10px 8px 10px;
         color: #809183;
         font-size: 12px;
-    }}
+    }
 
-    @media (max-width: 768px) {{
-        .hero {{
+    /* ADAPTACIÓN A MÓVILES */
+
+    @media (max-width: 768px) {
+
+        .block-container {
+            padding: 0.7rem 0.8rem 2rem 0.8rem;
+        }
+
+        .hero {
             min-height: 650px;
-            padding-top: 45px;
+            padding: 42px 16px 30px 16px;
             background-position: center center;
-        }}
+        }
 
-        .hero-description {{
+        .hero-description {
             font-size: 14px;
-        }}
+        }
 
-        .access-section h2 {{
+        .access-section h2 {
             font-size: 29px;
-        }}
-    }}
+        }
+
+    }
 
     </style>
-    """, unsafe_allow_html=True)
-
-else:
-
-    st.error(
-        "No se encontró assets/fondogranja.jpg. "
-        "Comprueba que la imagen esté en la carpeta assets."
-    )
+    """,
+    unsafe_allow_html=True
+)
 
 
 # =====================================================
 # PORTADA PRINCIPAL
 # =====================================================
 
-st.markdown("""
-<div class="hero">
+if fondo:
 
-    <div class="hero-content">
+    st.markdown(
+        f"""
+        <section class="hero" style="background-image:
+            linear-gradient(
+                to bottom,
+                rgba(218, 247, 231, 0.05) 0%,
+                rgba(218, 247, 231, 0.02) 48%,
+                rgba(2, 48, 35, 0.12) 100%
+            ),
+            url('{fondo}');">
 
-        <div class="brand-small">
-            🌱 TECNOLOGÍA PARA EL CAMPO
-        </div>
+            <div class="hero-content">
 
-        <h1>GranjaConecta</h1>
+                <div class="brand-small">
+                    🌱 TECNOLOGÍA PARA EL CAMPO
+                </div>
 
-        <div class="hero-description">
-            Una granja más inteligente, conectada y sostenible.
-            Monitorea y controla espacios esenciales para el
-            bienestar animal mediante tecnología y automatización.
-        </div>
+                <h1>GranjaConecta</h1>
 
-        <div class="hero-tag">
-            INNOVACIÓN · BIENESTAR ANIMAL · AUTOMATIZACIÓN
-        </div>
+                <div class="hero-description">
+                    Una granja más inteligente, conectada y sostenible.
+                    Monitorea y controla espacios esenciales para el
+                    bienestar animal mediante tecnología y automatización.
+                </div>
 
-    </div>
+                <div class="hero-tag">
+                    INNOVACIÓN · BIENESTAR ANIMAL · AUTOMATIZACIÓN
+                </div>
 
-</div>
-""", unsafe_allow_html=True)
+            </div>
+
+        </section>
+        """,
+        unsafe_allow_html=True
+    )
+
+else:
+
+    st.error(
+        "No se encontró la imagen 'fondogranja.jpg'. "
+        "Colócala en la raíz del repositorio, "
+        "junto a Inicioapp.py."
+    )
 
 
 # =====================================================
 # SECCIÓN DE ACCESO
 # =====================================================
 
-st.markdown("""
-<div class="access-section">
+st.markdown(
+    """
+    <div class="access-section">
 
-    <h2>Explora tu granja</h2>
+        <h2>Explora tu granja</h2>
 
-    <p>
-        Selecciona el área que deseas supervisar y controlar.
-    </p>
+        <p>
+            Selecciona el área que deseas supervisar y controlar.
+        </p>
 
-</div>
-""", unsafe_allow_html=True)
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 
 # =====================================================
-# DOS SECCIONES PRINCIPALES
+# TARJETAS DE LAS DOS SECCIONES
 # =====================================================
 
-col_corral, col_bebedero = st.columns(2, gap="large")
+col_corral, col_bebedero = st.columns(
+    2,
+    gap="large"
+)
 
 
 # -----------------------------------------------------
-# CORRAL
+# SECCIÓN CORRAL
 # -----------------------------------------------------
 
 with col_corral:
 
     with st.container(border=True):
 
-        st.markdown("""
-        <div class="card-icon">🐄</div>
+        st.markdown(
+            """
+            <div class="card-icon">🐄</div>
 
-        <div class="card-title">
-            Control del corral
-        </div>
+            <div class="card-title">
+                Control del corral
+            </div>
 
-        <div class="card-text">
-            Gestiona la apertura y el cierre de la puerta
-            del corral y regula la ventilación mediante
-            reconocimiento de gestos.
-        </div>
-        """, unsafe_allow_html=True)
+            <div class="card-text">
+                Gestiona la apertura y el cierre de la puerta
+                del corral y regula la ventilación mediante
+                reconocimiento de gestos.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
         st.page_link(
             "pages/2_Corral.py",
@@ -322,26 +359,29 @@ with col_corral:
 
 
 # -----------------------------------------------------
-# BEBEDERO
+# SECCIÓN BEBEDERO
 # -----------------------------------------------------
 
 with col_bebedero:
 
     with st.container(border=True):
 
-        st.markdown("""
-        <div class="card-icon">💧</div>
+        st.markdown(
+            """
+            <div class="card-icon">💧</div>
 
-        <div class="card-title">
-            Control del bebedero
-        </div>
+            <div class="card-title">
+                Control del bebedero
+            </div>
 
-        <div class="card-text">
-            Consulta el nivel de agua, la temperatura
-            y la humedad. Controla la válvula mediante
-            comandos de voz o texto.
-        </div>
-        """, unsafe_allow_html=True)
+            <div class="card-text">
+                Consulta el nivel de agua, la temperatura
+                y la humedad. Controla la válvula mediante
+                comandos de voz o texto.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
         st.page_link(
             "pages/1_Bebedero.py",
@@ -354,12 +394,15 @@ with col_bebedero:
 # PIE DE PÁGINA
 # =====================================================
 
-st.markdown("""
-<div class="footer">
+st.markdown(
+    """
+    <div class="footer">
 
-    <b>GranjaConecta</b><br>
+        <strong>GranjaConecta</strong><br>
 
-    Tecnología al servicio del bienestar animal.
+        Tecnología al servicio del bienestar animal.
 
-</div>
-""", unsafe_allow_html=True)
+    </div>
+    """,
+    unsafe_allow_html=True
+)
