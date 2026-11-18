@@ -1,2 +1,5 @@
 streamlit
-paho-mqtt>=2.0
+paho-mqtt==2.1.0
+tensorflow==2.15.1
+numpy==1.26.4
+Pillow
