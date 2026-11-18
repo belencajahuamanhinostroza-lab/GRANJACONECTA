@@ -1,0 +1,6 @@
+0 Abrir puerta
+1 Cerrar puerta
+2 Subir Temperatura
+3 Bajar temperatura
+4 Subir humedad
+5 Bajar humedad
