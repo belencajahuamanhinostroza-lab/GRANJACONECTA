@@ -1,18 +1,18 @@
 
 import streamlit as st
 import streamlit.components.v1 as components
+import paho.mqtt.client as mqtt
 import json
-import os
 import uuid
 import queue
-import threading
-import time
+import os
+import hashlib
 import numpy as np
 from PIL import Image
 
-# =========================================================
-# CONFIGURACIÓN GENERAL
-# =========================================================
+# =====================================================
+# 1. CONFIGURACION
+# =====================================================
 
 st.set_page_config(
     page_title="GranjaConecta - Corral",
@@ -30,28 +30,9 @@ TOPICO_RESPUESTAS = "granjaconecta/respuestas"
 RUTA_MODELO = "keras_model.h5"
 RUTA_LABELS = "labels.txt"
 
-# =========================================================
-# IMPORTACIONES OPCIONALES
-# =========================================================
-
-try:
-    import paho.mqtt.client as mqtt
-    MQTT_DISPONIBLE = True
-except ImportError:
-    mqtt = None
-    MQTT_DISPONIBLE = False
-
-try:
-    from tensorflow.keras.models import load_model
-    TENSORFLOW_DISPONIBLE = True
-except Exception:
-    load_model = None
-    TENSORFLOW_DISPONIBLE = False
-
-
-# =========================================================
-# ESTILOS
-# =========================================================
+# =====================================================
+# 2. ESTILOS
+# =====================================================
 
 st.markdown("""
 <style>
@@ -85,13 +66,9 @@ div[data-testid="stMetric"] {
 </style>
 """, unsafe_allow_html=True)
 
-
-# =========================================================
-# ESTADO DE LA APLICACIÓN
-# =========================================================
-
-if "humedad_visual" not in st.session_state:
-    st.session_state.humedad_visual = 50
+# =====================================================
+# 3. ESTADO DE STREAMLIT
+# =====================================================
 
 if "telemetria" not in st.session_state:
     st.session_state.telemetria = {}
@@ -105,270 +82,444 @@ if "ultimo_gesto" not in st.session_state:
 if "ultima_accion" not in st.session_state:
     st.session_state.ultima_accion = "Ninguna"
 
+if "humedad_visual" not in st.session_state:
+    st.session_state.humedad_visual = 50
 
-# =========================================================
-# CONEXIÓN MQTT
-# =========================================================
+if "ultima_imagen" not in st.session_state:
+    st.session_state.ultima_imagen = None
+
+if "mqtt_estado" not in st.session_state:
+    st.session_state.mqtt_estado = False
+
+# =====================================================
+# 4. CONEXION MQTT
+# =====================================================
 
 @st.cache_resource
 def crear_conexion_mqtt():
 
-    if not MQTT_DISPONIBLE:
-        return None, None
-
     mensajes = queue.Queue()
 
+    cliente = mqtt.Client(
+        callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+        client_id="GranjaConecta_Corral_" + uuid.uuid4().hex[:8]
+    )
+
+    def al_conectar(client, userdata, flags, reason_code, properties):
+
+        if reason_code == 0:
+
+            mensajes.put(("conexion", "conectado"))
+
+            client.subscribe(TOPICO_TELEMETRIA)
+            client.subscribe(TOPICO_RESPUESTAS)
+
+        else:
+            mensajes.put(("conexion", "error"))
+
+    def al_recibir(client, userdata, msg):
+
+        try:
+            contenido = msg.payload.decode("utf-8")
+            mensajes.put((msg.topic, contenido))
+
+        except Exception as error:
+            print("Error recibiendo MQTT:", error)
+
+    cliente.on_connect = al_conectar
+    cliente.on_message = al_recibir
+
     try:
-        cliente = mqtt.Client(
-            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-            client_id="GranjaConecta_Corral_" + uuid.uuid4().hex[:8]
-        )
-
-        def al_conectar(client, userdata, flags, reason_code, properties):
-            if reason_code == 0:
-                client.subscribe(TOPICO_TELEMETRIA)
-                client.subscribe(TOPICO_RESPUESTAS)
-
-        def al_recibir(client, userdata, msg):
-            try:
-                contenido = msg.payload.decode("utf-8")
-                mensajes.put((msg.topic, contenido))
-            except Exception:
-                pass
-
-        cliente.on_connect = al_conectar
-        cliente.on_message = al_recibir
-
         cliente.connect(BROKER, PUERTO, 60)
         cliente.loop_start()
 
-        return cliente, mensajes
+        return cliente, mensajes, None
 
     except Exception as error:
-        print("Error de conexión MQTT:", error)
-        return None, None
+
+        return None, mensajes, str(error)
 
 
-cliente_mqtt = None
-cola_mensajes = None
+cliente_mqtt, cola_mensajes, error_mqtt = crear_conexion_mqtt()
 
-if MQTT_DISPONIBLE:
-    cliente_mqtt, cola_mensajes = crear_conexion_mqtt()
-
+# =====================================================
+# 5. FUNCION PARA ENVIAR COMANDOS
+# =====================================================
 
 def publicar_comando(comando):
 
     if cliente_mqtt is None:
-        st.error(
-            "No hay conexión MQTT. Revisa la instalación de paho-mqtt "
-            "y la conexión con el broker."
-        )
-        return
+        st.error("No hay conexión MQTT con el broker.")
+        return False
 
     try:
-        mensaje = json.dumps({"comando": comando})
+
         resultado = cliente_mqtt.publish(
             TOPICO_COMANDOS,
-            mensaje
+            comando,
+            qos=0,
+            retain=False
         )
 
-        if resultado.rc == 0:
-            st.success("Comando enviado: " + comando)
-        else:
-            st.error("No se pudo enviar el comando MQTT.")
+        if resultado.rc == mqtt.MQTT_ERR_SUCCESS:
+            return True
+
+        st.error("No se pudo enviar el comando MQTT.")
+        return False
 
     except Exception as error:
+
         st.error(f"Error enviando comando: {error}")
+        return False
 
 
-# =========================================================
-# RECEPCIÓN DE TELEMETRÍA
-# =========================================================
+# =====================================================
+# 6. ACTUALIZAR TELEMETRIA
+# =====================================================
 
-if cola_mensajes is not None:
+def procesar_mensajes():
 
     while True:
+
         try:
+
             topico, contenido = cola_mensajes.get_nowait()
 
-            datos = json.loads(contenido)
+            if topico == "conexion":
 
-            if topico == TOPICO_TELEMETRIA:
+                st.session_state.mqtt_estado = (
+                    contenido == "conectado"
+                )
+
+            elif topico == TOPICO_TELEMETRIA:
+
+                datos = json.loads(contenido)
+
                 st.session_state.telemetria.update(datos)
 
+                if "humedadVisual" in datos:
+                    st.session_state.humedad_visual = int(
+                        datos["humedadVisual"]
+                    )
+
             elif topico == TOPICO_RESPUESTAS:
+
                 st.session_state.respuestas.append(contenido)
+
+                st.session_state.respuestas = (
+                    st.session_state.respuestas[-10:]
+                )
 
         except queue.Empty:
             break
 
-        except Exception:
+        except Exception as error:
+            print("Error procesando telemetria:", error)
             break
 
 
-# =========================================================
-# CARGAR MODELO DE TEACHABLE MACHINE
-# =========================================================
+# =====================================================
+# 7. ACTUALIZACION AUTOMATICA CADA 2 SEGUNDOS
+# =====================================================
+
+@st.fragment(run_every="2s")
+def mostrar_monitoreo():
+
+    procesar_mensajes()
+
+    datos = st.session_state.telemetria
+
+    temperatura = datos.get("temperatura", "--")
+    humedad = datos.get("humedad", "--")
+    ventilacion = datos.get("ventilacion", "--")
+    puerta = datos.get("puerta", "--")
+
+    nivel_agua = datos.get("nivelAgua", "--")
+
+    st.subheader("📊 Monitoreo del corral")
+
+    if st.session_state.mqtt_estado:
+        st.success("Conectado al broker MQTT")
+    else:
+        st.warning("Esperando conexión MQTT...")
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        valor = (
+            f"{temperatura} °C"
+            if temperatura != "--"
+            else "--"
+        )
+        st.metric("🌡️ Temperatura", valor)
+
+    with c2:
+        valor = (
+            f"{humedad} %"
+            if humedad != "--"
+            else "--"
+        )
+        st.metric("💧 Humedad real", valor)
+
+    with c3:
+        valor = (
+            f"{ventilacion} %"
+            if ventilacion != "--"
+            else "--"
+        )
+        st.metric("🌀 Ventilación", valor)
+
+    with c4:
+        st.metric("🚪 Puerta", str(puerta))
+
+    st.metric(
+        "💧 Humedad visual",
+        f"{st.session_state.humedad_visual}%"
+    )
+
+    st.caption(
+        "La humedad visual es una representación gráfica. "
+        "No modifica la humedad real medida por el DHT22."
+    )
+
+    st.caption(
+        f"Último nivel de agua recibido: {nivel_agua}%"
+    )
+
+    if st.session_state.respuestas:
+
+        with st.expander("📩 Últimas respuestas del ESP32"):
+
+            for respuesta in reversed(
+                st.session_state.respuestas
+            ):
+                st.write("• " + respuesta)
+
+
+# =====================================================
+# 8. CARGAR MODELO KERAS
+# =====================================================
 
 @st.cache_resource
 def cargar_modelo():
 
-    if not TENSORFLOW_DISPONIBLE:
-        return None
+    from tensorflow.keras.models import load_model
 
     if not os.path.exists(RUTA_MODELO):
-        return None
+        raise FileNotFoundError(
+            "No se encuentra keras_model.h5"
+        )
 
-    try:
-        return load_model(RUTA_MODELO, compile=False)
-    except Exception as error:
-        print("Error cargando modelo:", error)
-        return None
+    return load_model(RUTA_MODELO, compile=False)
 
 
-modelo = cargar_modelo()
-
-
+@st.cache_data
 def cargar_etiquetas():
 
     if not os.path.exists(RUTA_LABELS):
-        return []
-
-    with open(RUTA_LABELS, "r", encoding="utf-8") as archivo:
-        return [
-            linea.strip().split(" ", 1)[-1]
-            for linea in archivo.readlines()
-            if linea.strip()
-        ]
-
-
-etiquetas = cargar_etiquetas()
-
-
-# =========================================================
-# RECONOCIMIENTO DE GESTOS
-# =========================================================
-
-def reconocer_gesto(imagen):
-
-    if modelo is None:
-        return None, None
-
-    try:
-        imagen = Image.open(imagen).convert("RGB")
-        imagen = imagen.resize((224, 224))
-
-        arreglo = np.asarray(imagen, dtype=np.float32)
-
-        datos = np.ndarray(
-            shape=(1, 224, 224, 3),
-            dtype=np.float32
+        raise FileNotFoundError(
+            "No se encuentra labels.txt"
         )
 
-        datos[0] = (arreglo / 127.0) - 1.0
+    with open(
+        RUTA_LABELS,
+        "r",
+        encoding="utf-8"
+    ) as archivo:
 
-        prediccion = modelo.predict(datos, verbose=0)
+        etiquetas = []
 
-        indice = int(np.argmax(prediccion[0]))
-        confianza = float(prediccion[0][indice]) * 100
+        for linea in archivo:
 
-        if indice < len(etiquetas):
-            etiqueta = etiquetas[indice]
-        else:
-            etiqueta = f"Clase {indice}"
+            linea = linea.strip()
 
-        return indice, confianza
+            if linea:
+                partes = linea.split(" ", 1)
 
-    except Exception as error:
-        st.error(f"Error al reconocer el gesto: {error}")
-        return None, None
+                if len(partes) == 2:
+                    etiquetas.append(partes[1])
+                else:
+                    etiquetas.append(partes[0])
+
+    return etiquetas
+
+
+# =====================================================
+# 9. RECONOCIMIENTO DE GESTOS
+# =====================================================
+
+def reconocer_gesto(imagen, modelo):
+
+    imagen = Image.open(imagen).convert("RGB")
+
+    imagen = imagen.resize((224, 224))
+
+    arreglo = np.asarray(
+        imagen,
+        dtype=np.float32
+    )
+
+    datos = np.ndarray(
+        shape=(1, 224, 224, 3),
+        dtype=np.float32
+    )
+
+    # Normalizacion utilizada en el modelo original
+    datos[0] = (arreglo / 127.0) - 1.0
+
+    prediccion = modelo.predict(
+        datos,
+        verbose=0
+    )
+
+    indice = int(np.argmax(prediccion[0]))
+
+    confianza = float(
+        prediccion[0][indice]
+    ) * 100
+
+    return indice, confianza
+
+
+# =====================================================
+# 10. ACCIONES DE LOS SEIS GESTOS
+# =====================================================
+
+ACCIONES = {
+
+    0: {
+        "nombre": "Abrir puerta",
+        "comando": "PUERTA_ABRIR",
+        "emoji": "✋"
+    },
+
+    1: {
+        "nombre": "Cerrar puerta",
+        "comando": "PUERTA_CERRAR",
+        "emoji": "✊"
+    },
+
+    2: {
+        "nombre": "Subir ventilación",
+        "comando": "VENTILACION_SUBIR",
+        "emoji": "👍"
+    },
+
+    3: {
+        "nombre": "Bajar ventilación",
+        "comando": "VENTILACION_BAJAR",
+        "emoji": "👎"
+    },
+
+    4: {
+        "nombre": "Subir humedad visual",
+        "comando": "HUMEDAD_SUBIR",
+        "emoji": "🫶"
+    },
+
+    5: {
+        "nombre": "Bajar humedad visual",
+        "comando": "HUMEDAD_BAJAR",
+        "emoji": "🫶"
+    }
+}
 
 
 def ejecutar_gesto(indice):
 
-    acciones = {
-        0: ("Abrir puerta", "PUERTA_ABRIR"),
-        1: ("Cerrar puerta", "PUERTA_CERRAR"),
-        2: ("Subir ventilación", "VENTILACION_SUBIR"),
-        3: ("Bajar ventilación", "VENTILACION_BAJAR"),
-        4: ("Subir humedad visual", "HUMEDAD_SUBIR"),
-        5: ("Bajar humedad visual", "HUMEDAD_BAJAR")
-    }
-
-    if indice not in acciones:
+    if indice not in ACCIONES:
+        st.error("Gesto no reconocido.")
         return
 
-    nombre, comando = acciones[indice]
+    accion = ACCIONES[indice]
 
-    st.session_state.ultimo_gesto = nombre
-    st.session_state.ultima_accion = nombre
+    nombre = accion["nombre"]
+    comando = accion["comando"]
 
-    if indice == 4:
-        st.session_state.humedad_visual = min(
-            100,
-            st.session_state.humedad_visual + 25
+    enviado = publicar_comando(comando)
+
+    if enviado:
+
+        st.session_state.ultimo_gesto = (
+            accion["emoji"] + " " + nombre
         )
 
-    elif indice == 5:
-        st.session_state.humedad_visual = max(
-            0,
-            st.session_state.humedad_visual - 25
-        )
+        st.session_state.ultima_accion = nombre
 
-    publicar_comando(comando)
+        if indice == 4:
 
+            st.session_state.humedad_visual = min(
+                100,
+                st.session_state.humedad_visual + 25
+            )
 
-# =========================================================
-# ENCABEZADO
-# =========================================================
+        elif indice == 5:
 
-st.title("🐄 GranjaConecta - Control del Corral")
-
-st.write(
-    "Monitoreo y control del corral mediante reconocimiento "
-    "de gestos y comunicación MQTT con ESP32."
-)
-
-if not MQTT_DISPONIBLE:
-    st.warning(
-        "La librería paho-mqtt no está instalada. "
-        "La página se mostrará, pero MQTT no estará disponible."
-    )
-elif cliente_mqtt is None:
-    st.warning("No se pudo establecer la conexión con el broker MQTT.")
-
-st.divider()
+            st.session_state.humedad_visual = max(
+                0,
+                st.session_state.humedad_visual - 25
+            )
 
 
-# =========================================================
-# SIDEBAR
-# =========================================================
+# =====================================================
+# 11. BARRA LATERAL
+# =====================================================
 
 with st.sidebar:
+
     st.title("🐄 GranjaConecta")
+
     st.markdown("---")
+
     st.subheader("Panel del corral")
-    st.write("Control por gestos")
-    st.write("Monitoreo ambiental")
-    st.write("Control de puerta")
-    st.write("Control de ventilación")
+
+    st.write("📷 Reconocimiento de gestos")
+    st.write("🚪 Control de puerta")
+    st.write("🌀 Control de ventilación")
+    st.write("💧 Humedad visual")
+    st.write("🌡️ Monitoreo ambiental")
+
     st.markdown("---")
+
     st.caption("Sistema académico de simulación")
 
 
-# =========================================================
-# ESCENARIO DEL GRANERO
-# =========================================================
+# =====================================================
+# 12. ENCABEZADO
+# =====================================================
+
+st.title("🐄 GranjaConecta - Corral")
+
+st.write(
+    "Monitoreo y control del corral mediante "
+    "reconocimiento de gestos y comunicación MQTT."
+)
+
+if cliente_mqtt is None:
+
+    st.error(
+        "No se pudo iniciar MQTT. "
+        "Comprueba la conexión y la instalación de paho-mqtt."
+    )
+
+    if error_mqtt:
+        st.caption(error_mqtt)
+
+# =====================================================
+# 13. ESCENARIO DEL GRANERO
+# =====================================================
+
+st.divider()
 
 st.subheader("🏡 Interior del granero")
 
-humedad = st.session_state.humedad_visual
+humedad_actual = st.session_state.humedad_visual
 
 html_granero = f"""
 <div style="
     width:100%;
-    height:330px;
-    background:linear-gradient(#b8d9e9 0%,#dcebd3 65%);
+    height:320px;
+    background:linear-gradient(#b8d9e9 0%,#dcebd3 70%);
     border:8px solid #754523;
     border-radius:15px;
     position:relative;
@@ -409,6 +560,7 @@ html_granero = f"""
             width:5px;
             background:#754523;
         "></div>
+
         <div style="
             position:absolute;
             top:50%;
@@ -422,7 +574,7 @@ html_granero = f"""
         position:absolute;
         bottom:0;
         width:100%;
-        height:95px;
+        height:90px;
         background:#8d633e;
         border-top:12px solid #4f8c38;
     "></div>
@@ -459,7 +611,7 @@ html_granero = f"""
 
     <div style="
         position:absolute;
-        top:135px;
+        top:145px;
         left:5%;
         font-size:24px;
     ">🌫️</div>
@@ -473,27 +625,30 @@ html_granero = f"""
 
     <div style="
         position:absolute;
-        bottom:15px;
+        bottom:12px;
         left:15px;
         color:white;
         font-weight:bold;
-        font-size:17px;
+        font-size:16px;
         text-shadow:1px 1px 3px black;
     ">
-        Humedad visual: {humedad}%
+        Humedad visual: {humedad_actual}%
     </div>
 
 </div>
 """
 
-components.html(html_granero, height=350)
+components.html(
+    html_granero,
+    height=340
+)
 
-
-# =========================================================
-# CÁMARA Y RESULTADO
-# =========================================================
+# =====================================================
+# 14. CAMARA Y RECONOCIMIENTO
+# =====================================================
 
 st.divider()
+
 st.subheader("📷 Reconocimiento de gestos")
 
 col_camara, col_resultado = st.columns([1, 1])
@@ -503,106 +658,106 @@ with col_camara:
     st.markdown("#### Cámara")
 
     foto = st.camera_input(
-        "Captura un gesto con tu mano",
+        "Toma una fotografía de tu gesto",
         key="camara_corral"
     )
 
 with col_resultado:
 
-    st.markdown("#### Gesto reconocido")
+    st.markdown("#### Resultado del reconocimiento")
 
     st.info(
-        f"**Gesto:** {st.session_state.ultimo_gesto}"
+        "Último gesto: " +
+        st.session_state.ultimo_gesto
     )
 
     st.info(
-        f"**Acción:** {st.session_state.ultima_accion}"
+        "Acción: " +
+        st.session_state.ultima_accion
     )
 
     if foto is not None:
 
-        if modelo is None:
-            st.error(
-                "No se pudo cargar el modelo. "
-                "Verifica keras_model.h5 y TensorFlow."
-            )
+        contenido = foto.getvalue()
 
-        else:
+        hash_imagen = hashlib.md5(
+            contenido
+        ).hexdigest()
 
-            indice, confianza = reconocer_gesto(foto)
+        # Evitar enviar varias veces el mismo gesto
+        if hash_imagen != st.session_state.ultima_imagen:
 
-            if indice is not None:
+            st.session_state.ultima_imagen = hash_imagen
 
-                if confianza >= 70:
+            try:
 
-                    st.success(
-                        f"Confianza del reconocimiento: {confianza:.1f}%"
+                modelo = cargar_modelo()
+                etiquetas = cargar_etiquetas()
+
+                indice, confianza = reconocer_gesto(
+                    foto,
+                    modelo
+                )
+
+                if indice >= len(etiquetas):
+
+                    st.error(
+                        "El índice reconocido no coincide "
+                        "con las etiquetas del modelo."
                     )
 
-                    ejecutar_gesto(indice)
+                elif confianza >= 70:
 
-                    st.rerun()
+                    st.success(
+                        f"Confianza: {confianza:.1f}%"
+                    )
+
+                    st.write(
+                        "Etiqueta del modelo: "
+                        + etiquetas[indice]
+                    )
+
+                    if indice in ACCIONES:
+
+                        ejecutar_gesto(indice)
+
+                        st.rerun()
+
+                    else:
+
+                        st.warning(
+                            "La clase reconocida no tiene "
+                            "una acción configurada."
+                        )
 
                 else:
 
                     st.warning(
                         f"Confianza baja: {confianza:.1f}%. "
-                        "Intenta tomar otra fotografía."
+                        "Intenta otra fotografía."
                     )
 
+            except Exception as error:
 
-# =========================================================
-# INDICADORES DE TELEMETRÍA
-# =========================================================
+                st.error(
+                    f"Error con el modelo: {error}"
+                )
 
-st.divider()
-st.subheader("📊 Monitoreo del corral")
-
-datos = st.session_state.telemetria
-
-temperatura = datos.get("temperatura", "--")
-humedad_real = datos.get("humedad", "--")
-ventilacion = datos.get("ventilacion", "--")
-puerta = datos.get("puerta", "--")
-
-c1, c2, c3, c4 = st.columns(4)
-
-with c1:
-    st.metric(
-        "🌡️ Temperatura",
-        f"{temperatura} °C" if temperatura != "--" else "--"
-    )
-
-with c2:
-    st.metric(
-        "💧 Humedad real",
-        f"{humedad_real} %" if humedad_real != "--" else "--"
-    )
-
-with c3:
-    st.metric(
-        "🌀 Ventilación",
-        f"{ventilacion} %" if ventilacion != "--" else "--"
-    )
-
-with c4:
-    st.metric(
-        "🚪 Puerta",
-        str(puerta)
-    )
-
-st.caption(
-    "La humedad visual modificada por gestos es una representación "
-    "gráfica y no modifica la humedad física medida por el sensor."
-)
-
-
-# =========================================================
-# CONTROLES MANUALES
-# =========================================================
+# =====================================================
+# 15. MONITOREO AUTOMATICO
+# =====================================================
 
 st.divider()
-st.subheader("🎮 Controles manuales")
+
+mostrar_monitoreo()
+
+# =====================================================
+# 16. CONTROLES MANUALES
+# =====================================================
+
+st.divider()
+
+st.subheader("🎮 Controles manuales del corral")
 
 col_puerta, col_ventilacion, col_humedad = st.columns(3)
 
@@ -610,54 +765,72 @@ with col_puerta:
 
     st.markdown("#### 🚪 Puerta")
 
-    if st.button("Abrir puerta", use_container_width=True):
-        publicar_comando("PUERTA_ABRIR")
+    if st.button(
+        "Abrir puerta",
+        use_container_width=True
+    ):
 
-    if st.button("Cerrar puerta", use_container_width=True):
-        publicar_comando("PUERTA_CERRAR")
+        if publicar_comando("PUERTA_ABRIR"):
+            st.success("Comando enviado")
+
+    if st.button(
+        "Cerrar puerta",
+        use_container_width=True
+    ):
+
+        if publicar_comando("PUERTA_CERRAR"):
+            st.success("Comando enviado")
 
 
 with col_ventilacion:
 
     st.markdown("#### 🌀 Ventilación")
 
-    if st.button("Subir ventilación", use_container_width=True):
-        publicar_comando("VENTILACION_SUBIR")
+    if st.button(
+        "Subir ventilación",
+        use_container_width=True
+    ):
 
-    if st.button("Bajar ventilación", use_container_width=True):
-        publicar_comando("VENTILACION_BAJAR")
+        if publicar_comando("VENTILACION_SUBIR"):
+            st.success("Comando enviado")
+
+    if st.button(
+        "Bajar ventilación",
+        use_container_width=True
+    ):
+
+        if publicar_comando("VENTILACION_BAJAR"):
+            st.success("Comando enviado")
 
 
 with col_humedad:
 
     st.markdown("#### 💧 Humedad visual")
 
-    if st.button("Subir humedad visual", use_container_width=True):
-        st.session_state.humedad_visual = min(
-            100,
-            st.session_state.humedad_visual + 25
-        )
-        publicar_comando("HUMEDAD_SUBIR")
-        st.rerun()
+    if st.button(
+        "Subir humedad visual",
+        use_container_width=True
+    ):
 
-    if st.button("Bajar humedad visual", use_container_width=True):
-        st.session_state.humedad_visual = max(
-            0,
-            st.session_state.humedad_visual - 25
-        )
-        publicar_comando("HUMEDAD_BAJAR")
-        st.rerun()
+        if publicar_comando("HUMEDAD_SUBIR"):
+            st.success("Comando enviado")
+
+    if st.button(
+        "Bajar humedad visual",
+        use_container_width=True
+    ):
+
+        if publicar_comando("HUMEDAD_BAJAR"):
+            st.success("Comando enviado")
 
 
-# =========================================================
-# ACTUALIZACIÓN DE DATOS
-# =========================================================
+# =====================================================
+# 17. PIE DE PAGINA
+# =====================================================
 
 st.divider()
 
-if st.button("🔄 Actualizar telemetría", use_container_width=True):
-    st.rerun()
-
 st.caption(
-    "GranjaConecta | Prototipo académico con ESP32, Wokwi y MQTT"
+    "GranjaConecta | ESP32 + Wokwi + MQTT | "
+    "Prototipo académico de monitoreo y control ganadero."
 )
