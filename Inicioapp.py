@@ -1,9 +1,10 @@
 
 import streamlit as st
+from pathlib import Path
 
-# -----------------------------------------
-# CONFIGURACIÓN GENERAL
-# -----------------------------------------
+# --------------------------------
+# CONFIGURACIÓN
+# --------------------------------
 
 st.set_page_config(
     page_title="GranjaConecta",
@@ -12,180 +13,263 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# -----------------------------------------
-# ESTILO VISUAL
-# -----------------------------------------
+# --------------------------------
+# ESTILOS
+# --------------------------------
 
 st.markdown("""
 <style>
-    .stApp {
-        background-color: #F4F7F1;
-    }
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;500;600;700;800&display=swap');
 
-    .main-title {
-        text-align: center;
-        color: #24543B;
-        font-size: 48px;
-        font-weight: 800;
-        margin-bottom: 5px;
-    }
+html, body, [class*="css"] {
+    font-family: 'Nunito Sans', sans-serif;
+}
 
-    .subtitle {
-        text-align: center;
-        color: #53665A;
-        font-size: 18px;
-        margin-bottom: 30px;
-    }
+.stApp {
+    background: #F5F9F3;
+}
 
-    .welcome {
-        background-color: #E3EDE2;
-        padding: 25px;
-        border-radius: 16px;
-        text-align: center;
-        color: #294B36;
-        margin-bottom: 25px;
-    }
+.block-container {
+    max-width: 1180px;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
 
-    .section-title {
-        color: #24543B;
-        font-size: 24px;
-        font-weight: bold;
-    }
+header[data-testid="stHeader"] {
+    background: transparent;
+}
 
-    div.stButton > button {
-        background-color: #34734C;
-        color: white;
-        border-radius: 10px;
-        border: none;
-        height: 48px;
-        font-weight: bold;
-        width: 100%;
-    }
+.brand {
+    color: #183D2A;
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -1px;
+}
 
-    div.stButton > button:hover {
-        background-color: #24543B;
-        color: white;
-    }
+.brand span {
+    color: #8DBB37;
+}
+
+.tagline {
+    color: #647568;
+    font-size: 16px;
+    margin-top: -8px;
+}
+
+.hero {
+    background: #E8F2E4;
+    border-radius: 22px;
+    padding: 25px 30px;
+    margin: 22px 0;
+    text-align: center;
+}
+
+.hero h2 {
+    color: #183D2A;
+    font-size: 28px;
+    margin-bottom: 8px;
+}
+
+.hero p {
+    color: #506452;
+    font-size: 16px;
+    margin-bottom: 0;
+}
+
+.section-heading {
+    color: #183D2A;
+    font-size: 25px;
+    font-weight: 800;
+    margin-top: 28px;
+    margin-bottom: 5px;
+}
+
+.section-description {
+    color: #657568;
+    font-size: 15px;
+    margin-bottom: 20px;
+}
+
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: white;
+    border: 1px solid #E1EBDD;
+    border-radius: 18px;
+    padding: 15px;
+}
+
+.card-title {
+    color: #183D2A;
+    font-size: 23px;
+    font-weight: 800;
+}
+
+.card-description {
+    color: #5E6D61;
+    font-size: 15px;
+    min-height: 70px;
+}
+
+div.stButton > button,
+div[data-testid="stPageLink"] a {
+    background: #24583A;
+    color: white !important;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    padding: 12px 18px;
+    transition: 0.2s;
+}
+
+div.stButton > button:hover,
+div[data-testid="stPageLink"] a:hover {
+    background: #A6D63D;
+    color: #173B27 !important;
+    border: none;
+}
+
+footer {
+    visibility: hidden;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------------------
+# --------------------------------
 # BARRA LATERAL
-# -----------------------------------------
+# --------------------------------
 
 with st.sidebar:
-    st.title("🐄 GranjaConecta")
-    st.caption("Sistema inteligente de monitoreo y control")
+    st.markdown("## 🐄 GranjaConecta")
+    st.caption("Monitoreo inteligente de granjas")
 
     st.divider()
 
-    st.write("**Navegación principal**")
-    st.write("🏠 Inicio")
-    st.write("💧 Control del bebedero")
-    st.write("🏡 Control del corral")
+    st.markdown("### Navegación")
+    st.page_link("app.py", label="Inicio", icon="🏠")
+    st.page_link(
+        "pages/1_Bebedero.py",
+        label="Bebedero",
+        icon="💧"
+    )
+    st.page_link(
+        "pages/2_Corral.py",
+        label="Corral",
+        icon="🐄"
+    )
 
     st.divider()
+    st.caption("Tecnología al servicio del bienestar animal.")
 
-    st.caption("Proyecto de monitoreo y automatización ganadera.")
-
-# -----------------------------------------
+# --------------------------------
 # ENCABEZADO
-# -----------------------------------------
-
-st.markdown(
-    '<div class="main-title">🐄 GranjaConecta</div>',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '<div class="subtitle">'
-    'Tecnología inteligente para el cuidado y monitoreo ganadero'
-    '</div>',
-    unsafe_allow_html=True
-)
-
-# -----------------------------------------
-# PRESENTACIÓN
-# -----------------------------------------
+# --------------------------------
 
 st.markdown("""
-<div class="welcome">
-    <h2>¡Bienvenido a GranjaConecta!</h2>
+<div class="brand">Granja<span>Conecta</span> 🐄</div>
+<div class="tagline">
+Tecnología, bienestar animal y gestión inteligente
+</div>
+""", unsafe_allow_html=True)
+
+# --------------------------------
+# BIENVENIDA
+# --------------------------------
+
+st.markdown("""
+<div class="hero">
+    <h2>¡Bienvenido a tu granja!</h2>
     <p>
-        Una propuesta tecnológica que integra monitoreo,
-        automatización y control para facilitar la gestión
-        de una granja ganadera.
-    </p>
-    <p>
-        Selecciona el área que deseas gestionar para comenzar.
+    Un espacio para supervisar y controlar las áreas
+    principales de GranjaConecta.
     </p>
 </div>
 """, unsafe_allow_html=True)
 
-# -----------------------------------------
-# SECCIONES PRINCIPALES
-# -----------------------------------------
+# --------------------------------
+# ILUSTRACIÓN DE LA GRANJA
+# --------------------------------
+
+image_path = Path("assets/granja_conecta.png")
+
+if image_path.exists():
+    st.image(
+        str(image_path),
+        use_container_width=True
+    )
+else:
+    st.warning(
+        "Agrega la ilustración en assets/granja_conecta.png"
+    )
+
+# --------------------------------
+# ACCESOS A LAS DOS SECCIONES
+# --------------------------------
+
+st.markdown(
+    '<div class="section-heading">Explora tu granja</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown("""
+<div class="section-description">
+Selecciona el área que deseas consultar o controlar.
+</div>
+""", unsafe_allow_html=True)
 
 col1, col2 = st.columns(2, gap="large")
 
 with col1:
-    st.markdown(
-        '<div class="section-title">💧 Control del bebedero</div>',
-        unsafe_allow_html=True
-    )
+    with st.container(border=True):
+        st.markdown(
+            '<div class="card-title">🐄 El corral</div>',
+            unsafe_allow_html=True
+        )
 
-    st.image(
-        "https://images.unsplash.com/photo-1548839140-29a749e1cf4d"
-        "?auto=format&fit=crop&w=900&q=80",
-        use_container_width=True
-    )
+        st.markdown("""
+        <div class="card-description">
+        Supervisa el acceso al corral, controla la puerta
+        y regula la ventilación mediante reconocimiento
+        de gestos.
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.write("""
-    Consulta el nivel de agua, la temperatura y la humedad.
-    También podrás controlar la apertura y el cierre de la válvula
-    mediante comandos de voz o texto.
-    """)
-
-    st.page_link(
-        "pages/1_Bebedero.py",
-        label="Ingresar al bebedero 💧",
-        icon="➡️",
-        use_container_width=True
-    )
+        st.page_link(
+            "pages/2_Corral.py",
+            label="INGRESAR AL CORRAL",
+            icon="➡️",
+            use_container_width=True
+        )
 
 with col2:
-    st.markdown(
-        '<div class="section-title">🏡 Control del corral</div>',
-        unsafe_allow_html=True
-    )
+    with st.container(border=True):
+        st.markdown(
+            '<div class="card-title">💧 El bebedero</div>',
+            unsafe_allow_html=True
+        )
 
-    st.image(
-        "https://images.unsplash.com/photo-1500595046743-cd271d694d30"
-        "?auto=format&fit=crop&w=900&q=80",
-        use_container_width=True
-    )
+        st.markdown("""
+        <div class="card-description">
+        Consulta el nivel de agua, la temperatura y la
+        humedad. Controla la válvula mediante voz o texto.
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.write("""
-    Gestiona la apertura y el cierre de la puerta del corral
-    y regula la ventilación mediante reconocimiento de gestos.
-    """)
+        st.page_link(
+            "pages/1_Bebedero.py",
+            label="INGRESAR AL BEBEDERO",
+            icon="➡️",
+            use_container_width=True
+        )
 
-    st.page_link(
-        "pages/2_Corral.py",
-        label="Ingresar al corral 🏡",
-        icon="➡️",
-        use_container_width=True
-    )
-
-# -----------------------------------------
+# --------------------------------
 # PIE DE PÁGINA
-# -----------------------------------------
+# --------------------------------
 
 st.divider()
 
-st.markdown(
-    "<p style='text-align:center; color:#718074;'>"
-    "GranjaConecta | Innovación y tecnología para el sector ganadero"
-    "</p>",
-    unsafe_allow_html=True
-)
+st.markdown("""
+<div style="text-align:center; color:#718074; padding:10px;">
+    <b>GranjaConecta</b><br>
+    Innovación para una gestión ganadera inteligente
+</div>
+""", unsafe_allow_html=True)
