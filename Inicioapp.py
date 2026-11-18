@@ -2,208 +2,270 @@
 import streamlit as st
 from pathlib import Path
 
-# --------------------------------
-# CONFIGURACIÓN
-# --------------------------------
+# =====================================================
+# CONFIGURACIÓN DE LA APLICACIÓN
+# =====================================================
 
 st.set_page_config(
-    page_title="GranjaConecta",
+    page_title="GranjaConecta | Inicio",
     page_icon="🐄",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --------------------------------
-# ESTILOS
-# --------------------------------
+# Ruta principal del proyecto
+BASE_DIR = Path(__file__).resolve().parent
+IMAGE_PATH = BASE_DIR / "assets" / "granja_conecta.png"
+
+
+# =====================================================
+# DISEÑO Y ESTILOS
+# =====================================================
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;500;600;700;800&display=swap');
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;500;600;700;800;900&display=swap');
 
 html, body, [class*="css"] {
     font-family: 'Nunito Sans', sans-serif;
 }
 
 .stApp {
-    background: #F5F9F3;
+    background-color: #F5F9F3;
+    color: #17251B;
 }
 
 .block-container {
-    max-width: 1180px;
+    max-width: 1200px;
     padding-top: 2rem;
     padding-bottom: 2rem;
 }
 
-header[data-testid="stHeader"] {
-    background: transparent;
+/* BARRA LATERAL */
+
+section[data-testid="stSidebar"] {
+    background-color: #E8F1E5;
 }
 
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    color: #204B32;
+}
+
+/* ENCABEZADO */
+
 .brand {
-    color: #183D2A;
-    font-size: 36px;
-    font-weight: 800;
-    letter-spacing: -1px;
+    font-size: 38px;
+    font-weight: 900;
+    color: #204B32;
+    letter-spacing: -1.5px;
 }
 
 .brand span {
-    color: #8DBB37;
+    color: #91BD36;
 }
 
 .tagline {
-    color: #647568;
-    font-size: 16px;
+    color: #68796C;
+    font-size: 15px;
     margin-top: -8px;
 }
 
+/* PRESENTACIÓN */
+
 .hero {
-    background: #E8F2E4;
+    background: linear-gradient(120deg, #E6F1E2, #F1F7E9);
+    border: 1px solid #DCE9D7;
     border-radius: 22px;
-    padding: 25px 30px;
-    margin: 22px 0;
-    text-align: center;
+    padding: 28px;
+    margin-top: 25px;
+    margin-bottom: 22px;
 }
 
 .hero h2 {
-    color: #183D2A;
-    font-size: 28px;
+    color: #204B32;
+    font-size: 29px;
+    font-weight: 900;
     margin-bottom: 8px;
 }
 
 .hero p {
-    color: #506452;
+    color: #526656;
     font-size: 16px;
     margin-bottom: 0;
 }
 
+/* SECCIONES */
+
 .section-heading {
-    color: #183D2A;
-    font-size: 25px;
-    font-weight: 800;
+    color: #204B32;
+    font-size: 26px;
+    font-weight: 900;
     margin-top: 28px;
-    margin-bottom: 5px;
 }
 
 .section-description {
-    color: #657568;
+    color: #68796C;
     font-size: 15px;
     margin-bottom: 20px;
 }
 
+/* TARJETAS */
+
 div[data-testid="stVerticalBlockBorderWrapper"] {
-    background: white;
-    border: 1px solid #E1EBDD;
+    background-color: #FFFFFF;
+    border: 1px solid #E0E9DD;
     border-radius: 18px;
-    padding: 15px;
+    padding: 18px;
 }
 
 .card-title {
-    color: #183D2A;
-    font-size: 23px;
-    font-weight: 800;
+    color: #204B32;
+    font-size: 24px;
+    font-weight: 900;
+    margin-bottom: 8px;
 }
 
 .card-description {
-    color: #5E6D61;
+    color: #627165;
     font-size: 15px;
-    min-height: 70px;
+    min-height: 75px;
 }
 
-div.stButton > button,
+/* BOTONES Y ENLACES */
+
 div[data-testid="stPageLink"] a {
-    background: #24583A;
+    background-color: #24583A;
     color: white !important;
-    border: none;
     border-radius: 12px;
-    font-weight: 700;
-    padding: 12px 18px;
-    transition: 0.2s;
-}
-
-div.stButton > button:hover,
-div[data-testid="stPageLink"] a:hover {
-    background: #A6D63D;
-    color: #173B27 !important;
     border: none;
+    font-weight: 800;
+    padding: 12px;
+    text-decoration: none;
 }
 
-footer {
-    visibility: hidden;
+div[data-testid="stPageLink"] a:hover {
+    background-color: #A6D63D;
+    color: #17251B !important;
+}
+
+/* PIE DE PÁGINA */
+
+.footer {
+    text-align: center;
+    color: #758477;
+    font-size: 13px;
+    padding: 15px;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# --------------------------------
-# BARRA LATERAL
-# --------------------------------
+
+# =====================================================
+# BARRA LATERAL Y NAVEGACIÓN
+# =====================================================
 
 with st.sidebar:
-    st.markdown("## 🐄 GranjaConecta")
-    st.caption("Monitoreo inteligente de granjas")
+
+    st.markdown(
+        "<h2 style='color:#204B32;'>🐄 GranjaConecta</h2>",
+        unsafe_allow_html=True
+    )
+
+    st.caption("Sistema inteligente de monitoreo ganadero")
 
     st.divider()
 
-    st.markdown("### Navegación")
-    st.page_link("app.py", label="Inicio", icon="🏠")
+    st.markdown("### Menú principal")
+
+    st.page_link(
+        "Inicioapp.py",
+        label="Inicio",
+        icon="🏠"
+    )
+
     st.page_link(
         "pages/1_Bebedero.py",
-        label="Bebedero",
+        label="Control del bebedero",
         icon="💧"
     )
+
     st.page_link(
         "pages/2_Corral.py",
-        label="Corral",
+        label="Control del corral",
         icon="🐄"
     )
 
     st.divider()
-    st.caption("Tecnología al servicio del bienestar animal.")
 
-# --------------------------------
-# ENCABEZADO
-# --------------------------------
+    st.markdown("### Nuestro propósito")
+
+    st.caption(
+        "Integrar tecnología y automatización "
+        "para apoyar el cuidado y la gestión "
+        "de una granja ganadera."
+    )
+
+
+# =====================================================
+# ENCABEZADO PRINCIPAL
+# =====================================================
 
 st.markdown("""
-<div class="brand">Granja<span>Conecta</span> 🐄</div>
+<div class="brand">
+    Granja<span>Conecta</span> 🐄
+</div>
+
 <div class="tagline">
-Tecnología, bienestar animal y gestión inteligente
+    Tecnología, bienestar animal y gestión inteligente
 </div>
 """, unsafe_allow_html=True)
 
-# --------------------------------
-# BIENVENIDA
-# --------------------------------
+
+# =====================================================
+# MENSAJE DE BIENVENIDA
+# =====================================================
 
 st.markdown("""
 <div class="hero">
+
     <h2>¡Bienvenido a tu granja!</h2>
+
     <p>
-    Un espacio para supervisar y controlar las áreas
-    principales de GranjaConecta.
+        Con GranjaConecta puedes supervisar y controlar
+        áreas importantes de tu granja mediante herramientas
+        tecnológicas que facilitan el monitoreo y la automatización.
     </p>
+
 </div>
 """, unsafe_allow_html=True)
 
-# --------------------------------
-# ILUSTRACIÓN DE LA GRANJA
-# --------------------------------
 
-image_path = Path("assets/granja_conecta.png")
+# =====================================================
+# ILUSTRACIÓN PRINCIPAL DE LA GRANJA
+# =====================================================
 
-if image_path.exists():
+if IMAGE_PATH.exists():
+
     st.image(
-        str(image_path),
+        str(IMAGE_PATH),
         use_container_width=True
     )
+
 else:
+
     st.warning(
-        "Agrega la ilustración en assets/granja_conecta.png"
+        "No se encontró la imagen de la granja. "
+        "Verifica que esté guardada en assets/granja_conecta.png"
     )
 
-# --------------------------------
-# ACCESOS A LAS DOS SECCIONES
-# --------------------------------
+
+# =====================================================
+# ACCESO A LAS SECCIONES
+# =====================================================
 
 st.markdown(
     '<div class="section-heading">Explora tu granja</div>',
@@ -212,24 +274,32 @@ st.markdown(
 
 st.markdown("""
 <div class="section-description">
-Selecciona el área que deseas consultar o controlar.
+    Selecciona el área que deseas consultar o controlar.
 </div>
 """, unsafe_allow_html=True)
 
-col1, col2 = st.columns(2, gap="large")
 
-with col1:
+col_corral, col_bebedero = st.columns(2, gap="large")
+
+
+# -----------------------------------------------------
+# TARJETA DEL CORRAL
+# -----------------------------------------------------
+
+with col_corral:
+
     with st.container(border=True):
+
         st.markdown(
-            '<div class="card-title">🐄 El corral</div>',
+            '<div class="card-title">🐄 Control del corral</div>',
             unsafe_allow_html=True
         )
 
         st.markdown("""
         <div class="card-description">
-        Supervisa el acceso al corral, controla la puerta
-        y regula la ventilación mediante reconocimiento
-        de gestos.
+            Supervisa el acceso al corral, controla la apertura
+            y el cierre de la puerta y regula la ventilación
+            mediante reconocimiento de gestos.
         </div>
         """, unsafe_allow_html=True)
 
@@ -240,17 +310,25 @@ with col1:
             use_container_width=True
         )
 
-with col2:
+
+# -----------------------------------------------------
+# TARJETA DEL BEBEDERO
+# -----------------------------------------------------
+
+with col_bebedero:
+
     with st.container(border=True):
+
         st.markdown(
-            '<div class="card-title">💧 El bebedero</div>',
+            '<div class="card-title">💧 Control del bebedero</div>',
             unsafe_allow_html=True
         )
 
         st.markdown("""
         <div class="card-description">
-        Consulta el nivel de agua, la temperatura y la
-        humedad. Controla la válvula mediante voz o texto.
+            Consulta el nivel de agua, la temperatura y la humedad.
+            Controla la apertura y el cierre de la válvula
+            mediante comandos de voz o texto.
         </div>
         """, unsafe_allow_html=True)
 
@@ -261,15 +339,16 @@ with col2:
             use_container_width=True
         )
 
-# --------------------------------
+
+# =====================================================
 # PIE DE PÁGINA
-# --------------------------------
+# =====================================================
 
 st.divider()
 
 st.markdown("""
-<div style="text-align:center; color:#718074; padding:10px;">
-    <b>GranjaConecta</b><br>
-    Innovación para una gestión ganadera inteligente
+<div class="footer">
+    <strong>GranjaConecta</strong><br>
+    Innovación y tecnología para el sector ganadero.
 </div>
 """, unsafe_allow_html=True)
