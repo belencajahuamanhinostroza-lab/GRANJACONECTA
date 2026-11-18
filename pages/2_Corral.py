@@ -1,578 +1,383 @@
 
-import streamlit as st
 import json
-import time
-from datetime import datetime
+from pathlib import Path
+import streamlit as st
 import streamlit.components.v1 as components
-
-try:
-    import paho.mqtt.publish as mqtt_publish
-    import paho.mqtt.subscribe as mqtt_subscribe
-    MQTT_DISPONIBLE = True
-except ImportError:
-    MQTT_DISPONIBLE = False
-
-
-# --------------------------------------------------
-# CONFIGURACIÓN
-# --------------------------------------------------
+from mqtt_utils import (
+    get_latest_telemetry,
+    get_responses,
+    publish_command,
+    mqtt_status
+)
 
 st.set_page_config(
-    page_title="GranjaConecta | Corral",
+    page_title="Corral | GranjaConecta",
     page_icon="🐄",
     layout="wide"
 )
 
-BROKER = "broker.hivemq.com"
-PUERTO = 1883
-
-TOPIC_COMANDOS = "granjaconecta/comandos"
-TOPIC_TELEMETRIA = "granjaconecta/telemetria"
-TOPIC_RESPUESTAS = "granjaconecta/respuestas"
-
-
-# --------------------------------------------------
-# ESTILOS
-# --------------------------------------------------
-
 st.markdown("""
 <style>
 .stApp {
-    background: linear-gradient(135deg, #f5fff8, #e9f7ed);
+    background: #f2fbf4;
 }
 
 section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #123d2b, #1d593b);
+    background: linear-gradient(180deg, #123d2b, #1e6542);
 }
 
 section[data-testid="stSidebar"] * {
     color: white !important;
 }
 
-h1, h2, h3 {
-    color: #174b32;
+.barn {
+    background: linear-gradient(180deg, #dff3e5, #f9fff9);
+    border: 2px solid #b8d9c1;
+    border-radius: 20px;
+    padding: 18px;
+    text-align: center;
 }
 
-p {
-    color: #365b45;
+.barn-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #164b34;
 }
 
-div.stButton > button {
-    background: #a7dc45;
-    color: #153b26;
-    border: none;
-    border-radius: 10px;
-    font-weight: bold;
-    padding: 0.65rem 1rem;
+.barn-door {
+    font-size: 5rem;
+    line-height: 1.2;
 }
 
-div.stButton > button:hover {
-    background: #8fc52e;
-    color: #153b26;
-    border: none;
-}
-
-div[data-testid="stMetric"] {
-    background: white;
-    border: 1px solid #d8eadc;
-    border-radius: 12px;
-    padding: 15px;
-}
-
-.tarjeta {
-    background: white;
-    border: 1px solid #d8eadc;
-    border-radius: 15px;
-    padding: 20px;
-    margin-bottom: 12px;
-}
-
-.subtitulo {
-    color: #5d8068;
-    font-size: 15px;
+.barn-note {
+    font-weight: 700;
+    color: #164b34;
 }
 </style>
 """, unsafe_allow_html=True)
 
 
-# --------------------------------------------------
-# FUNCIONES MQTT
-# --------------------------------------------------
+# ---------------------------------
+# TÍTULO
+# ---------------------------------
 
-def publicar_comando(datos):
-    """Envía un comando al ESP32 mediante MQTT."""
+st.title("🐄 Corral")
 
-    if not MQTT_DISPONIBLE:
-        st.error("No está instalada la librería paho-mqtt.")
-        return False
-
-    try:
-        mqtt_publish.single(
-            TOPIC_COMANDOS,
-            payload=json.dumps(datos),
-            hostname=BROKER,
-            port=PUERTO
-        )
-        return True
-
-    except Exception as error:
-        st.error(f"No se pudo enviar el comando: {error}")
-        return False
+st.write(
+    "Controla la puerta y la ventilación con gestos, "
+    "voz o escritura. El panel se actualiza con la "
+    "telemetría MQTT del ESP32."
+)
 
 
-def crear_mensaje(comando, valor, **otros):
-    mensaje = {
-        "seccion": "corral",
-        "comando": comando,
-        "valor": valor,
-        "origen": "streamlit",
-        "timestamp": datetime.now().isoformat()
-    }
+# ---------------------------------
+# RECIBIR DATOS DEL ESP32
+# ---------------------------------
 
-    mensaje.update(otros)
-    return mensaje
+data = get_latest_telemetry()
 
+temp = data.get("temperatura")
+hum = data.get("humedad")
+vent = data.get("ventilacion")
 
-def enviar_puerta(accion):
-    angulo = 90 if accion == "abrir" else 0
-
-    datos = crear_mensaje(
-        "puerta",
-        accion,
-        angulo=angulo
-    )
-
-    if publicar_comando(datos):
-        st.success(f"Comando enviado: puerta {accion}.")
+door = str(
+    data.get("puerta", "Sin dato")
+).upper()
 
 
-def enviar_ventilacion(porcentaje):
-    porcentaje = int(porcentaje)
-    pwm = int(porcentaje * 255 / 100)
+# ---------------------------------
+# COLOR DEL GRANERO SEGÚN TEMPERATURA
+# ---------------------------------
 
-    datos = crear_mensaje(
-        "ventilacion",
-        porcentaje,
-        porcentaje=porcentaje,
-        pwm=pwm
-    )
+if temp is None:
+    barn_color = "#e7f3e9"
+    climate = "Esperando temperatura"
 
-    if publicar_comando(datos):
-        st.success(f"Ventilación ajustada al {porcentaje}%.")
+elif float(temp) >= 30:
+    barn_color = "#f6c18b"
+    climate = "Temperatura alta"
 
+elif float(temp) <= 15:
+    barn_color = "#b8d9f4"
+    climate = "Temperatura baja"
 
-def enviar_gesto(gesto, accion, **otros):
-    datos = crear_mensaje(
-        "gesto",
-        gesto,
-        accion=accion,
-        **otros
-    )
-
-    if publicar_comando(datos):
-        st.success("Comando del gesto enviado al ESP32.")
+else:
+    barn_color = "#dff3e5"
+    climate = "Temperatura normal"
 
 
-def recibir_telemetria(topic):
-    """Lee el último mensaje disponible del tópico MQTT."""
+# ---------------------------------
+# ESTADO VISUAL DE LA PUERTA
+# ---------------------------------
 
-    if not MQTT_DISPONIBLE:
-        st.error("No está instalada la librería paho-mqtt.")
-        return None
+if door in ("ABIERTA", "ABIERTO", "OPEN"):
+    door_icon = "🚪"
+    door_label = "Puerta abierta"
 
-    try:
-        mensaje = mqtt_subscribe.simple(
-            topic,
-            hostname=BROKER,
-            port=PUERTO,
-            timeout=5
-        )
+elif door in ("CERRADA", "CERRADO", "CLOSED"):
+    door_icon = "🚪"
+    door_label = "Puerta cerrada"
 
-        contenido = mensaje.payload.decode("utf-8")
-        return json.loads(contenido)
-
-    except Exception as error:
-        st.warning(
-            "No se recibió información. "
-            "Verifica que el ESP32 esté conectado y publicando datos."
-        )
-        return None
+else:
+    door_icon = "🚪"
+    door_label = "Estado de puerta sin confirmar"
 
 
-# --------------------------------------------------
-# BARRA LATERAL
-# --------------------------------------------------
+# ---------------------------------
+# VAPOR SEGÚN HUMEDAD
+# ---------------------------------
 
-with st.sidebar:
-    st.markdown("## 🌱 GranjaConecta")
-    st.caption("Tecnología para el campo")
+if hum is None:
+    steam = "💨 Datos de humedad pendientes"
 
-    st.markdown("---")
+elif float(hum) >= 75:
+    steam = "🌫️🌫️🌫️ Humedad alta: mucho vapor"
 
-    st.markdown("### Navegación")
+elif float(hum) <= 35:
+    steam = "💨 Humedad baja: poco vapor"
 
-    st.page_link("Inicioapp.py", label="🏠 Inicio")
-    st.page_link("pages/1_Bebedero.py", label="💧 Bebedero")
-    st.page_link("pages/2_Corral.py", label="🐄 Corral")
-
-    st.markdown("---")
-
-    st.markdown("### Conexión")
-    st.caption(f"Broker: {BROKER}")
-    st.caption(f"Puerto: {PUERTO}")
-
-    if MQTT_DISPONIBLE:
-        st.success("Librería MQTT disponible")
-    else:
-        st.error("Falta instalar paho-mqtt")
+else:
+    steam = "Humedad normal: vapor habitual"
 
 
-# --------------------------------------------------
-# ENCABEZADO
-# --------------------------------------------------
+# ---------------------------------
+# REPRESENTACIÓN DEL GRANERO
+# ---------------------------------
 
-st.markdown("""
-<div style="
-    background: linear-gradient(110deg, #164b32, #287447);
-    padding: 28px;
-    border-radius: 18px;
-    color: white;
-    margin-bottom: 22px;
-">
-    <div style="
-        color: #b7e85b;
-        font-size: 13px;
-        font-weight: bold;
-        letter-spacing: 2px;
-    ">
-        GRANJACONECTA
+st.markdown(
+    f"""
+    <div class="barn" style="background:{barn_color};">
+
+        <div class="barn-title">
+            🏠 GRANERO · GRANJACONECTA
+        </div>
+
+        <div style="font-size:2rem;">
+            {steam}
+        </div>
+
+        <div class="barn-door">
+            {door_icon} 🐄
+        </div>
+
+        <div class="barn-note">
+            {door_label} · {climate}
+        </div>
+
     </div>
-
-    <h1 style="color:white; margin-bottom:5px;">
-        🐄 Control inteligente del corral
-    </h1>
-
-    <p style="color:#e4f4e8; margin-bottom:0;">
-        Supervisa y controla las condiciones del corral
-        mediante tecnología IoT.
-    </p>
-</div>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
 
 
-# --------------------------------------------------
-# INDICADORES
-# --------------------------------------------------
+# ---------------------------------
+# MÉTRICAS DEL CORRAL
+# ---------------------------------
 
-st.markdown("### Panel de control")
+st.subheader("Estado ambiental y del granero")
 
-col1, col2, col3 = st.columns(3)
+m1, m2, m3, m4 = st.columns(4)
 
-with col1:
-    st.metric("🚪 Puerta", "Control servo")
+m1.metric(
+    "Temperatura",
+    f"{temp} °C" if temp is not None else "—"
+)
 
-with col2:
-    st.metric("🌬️ Ventilación", "Control PWM")
+m2.metric(
+    "Humedad",
+    f"{hum} %" if hum is not None else "—"
+)
 
-with col3:
-    st.metric("📡 Comunicación", "MQTT")
+m3.metric(
+    "Ventilación",
+    f"{vent} %" if vent is not None else "—"
+)
 
-
-st.markdown("---")
-
-
-# --------------------------------------------------
-# PESTAÑAS
-# --------------------------------------------------
-
-tab_puerta, tab_ventilacion, tab_gestos, tab_telemetria = st.tabs([
-    "🚪 Puerta",
-    "🌬️ Ventilación",
-    "🖐️ Gestos",
-    "📊 Telemetría"
-])
+m4.metric(
+    "Puerta",
+    door
+)
 
 
-# --------------------------------------------------
-# PESTAÑA PUERTA
-# --------------------------------------------------
+# ---------------------------------
+# ALERTAS
+# ---------------------------------
 
-with tab_puerta:
+st.subheader("Alertas del corral")
 
-    st.markdown("### Control de la puerta")
-    st.write(
-        "Controla la apertura y el cierre de la puerta "
-        "del corral mediante un servomotor."
-    )
+hot = st.number_input(
+    "Alerta de temperatura alta (°C)",
+    value=30.0,
+    step=1.0
+)
 
-    izquierda, derecha = st.columns(2)
+cold = st.number_input(
+    "Alerta de temperatura baja (°C)",
+    value=15.0,
+    step=1.0
+)
 
-    with izquierda:
-        st.markdown("""
-        <div class="tarjeta">
-            <h3>🔓 Abrir puerta</h3>
-            <p class="subtitulo">
-                Envía la orden para llevar el servo a 90°.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+humid_high = st.number_input(
+    "Alerta de humedad alta (%)",
+    value=75.0,
+    step=1.0
+)
 
-        if st.button("Abrir puerta", key="abrir_puerta",
-                     use_container_width=True):
-            enviar_puerta("abrir")
+humid_low = st.number_input(
+    "Alerta de humedad baja (%)",
+    value=35.0,
+    step=1.0
+)
 
-    with derecha:
-        st.markdown("""
-        <div class="tarjeta">
-            <h3>🔒 Cerrar puerta</h3>
-            <p class="subtitulo">
-                Envía la orden para llevar el servo a 0°.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
 
-        if st.button("Cerrar puerta", key="cerrar_puerta",
-                     use_container_width=True):
-            enviar_puerta("cerrar")
+if temp is None or hum is None:
 
     st.info(
-        "El servo de la puerta está conectado al GPIO 19 del ESP32. "
-        "0° corresponde a cerrada y 90° a abierta."
+        "Esperando telemetría del ESP32. "
+        "Inicia Wokwi y comprueba la conexión MQTT."
     )
 
+else:
 
-# --------------------------------------------------
-# PESTAÑA VENTILACIÓN
-# --------------------------------------------------
+    alerts = []
 
-with tab_ventilacion:
+    if float(temp) >= hot:
+        alerts.append("🌡️ Temperatura elevada.")
 
-    st.markdown("### Control de ventilación")
+    if float(temp) <= cold:
+        alerts.append("🥶 Temperatura baja.")
 
-    st.write(
-        "Ajusta el nivel de ventilación del corral. "
-        "El sistema utiliza una señal PWM."
-    )
+    if float(hum) >= humid_high:
+        alerts.append("💧 Humedad elevada: hay mucho vapor.")
 
-    porcentaje = st.select_slider(
-        "Selecciona el nivel de ventilación",
-        options=[0, 25, 50, 75, 100],
-        value=50,
-        format_func=lambda x: f"{x}%"
-    )
+    if float(hum) <= humid_low:
+        alerts.append("🌵 Humedad baja: hay poco vapor.")
 
-    pwm = int(porcentaje * 255 / 100)
+    if alerts:
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.metric("Ventilación", f"{porcentaje}%")
-
-    with col2:
-        st.metric("Valor PWM", pwm)
-
-    st.progress(porcentaje / 100)
-
-    if st.button(
-        "Aplicar ventilación",
-        key="aplicar_ventilacion",
-        use_container_width=True
-    ):
-        enviar_ventilacion(porcentaje)
-
-    st.caption(
-        "El control PWM utiliza el GPIO 25 del ESP32. "
-        "El valor va de 0 a 255."
-    )
-
-
-# --------------------------------------------------
-# PESTAÑA GESTOS
-# --------------------------------------------------
-
-with tab_gestos:
-
-    st.markdown("### Reconocimiento de gestos")
-
-    st.write(
-        "Estos botones permiten probar las acciones que "
-        "posteriormente se podrán activar mediante reconocimiento "
-        "automático de la mano."
-    )
-
-    st.warning(
-        "Por ahora son botones de prueba. "
-        "Todavía no se encuentra implementada la detección "
-        "automática mediante cámara."
-    )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("""
-        <div class="tarjeta">
-            <h3>✋ Mano abierta</h3>
-            <p class="subtitulo">
-                Acción: abrir la puerta del corral.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if st.button("Probar mano abierta",
-                     key="gesto_mano_abierta",
-                     use_container_width=True):
-
-            enviar_gesto(
-                "mano_abierta",
-                "abrir_puerta",
-                angulo=90
-            )
-
-        st.markdown("""
-        <div class="tarjeta">
-            <h3>👍 Pulgar arriba</h3>
-            <p class="subtitulo">
-                Acción: aumentar la ventilación.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if st.button("Probar pulgar arriba",
-                     key="gesto_pulgar_arriba",
-                     use_container_width=True):
-
-            nuevo = min(
-                st.session_state.get("nivel_ventilacion", 50) + 25,
-                100
-            )
-
-            st.session_state.nivel_ventilacion = nuevo
-
-            enviar_gesto(
-                "pulgar_arriba",
-                "aumentar_ventilacion",
-                porcentaje=nuevo,
-                pwm=int(nuevo * 255 / 100)
-            )
-
-    with col2:
-        st.markdown("""
-        <div class="tarjeta">
-            <h3>✊ Puño cerrado</h3>
-            <p class="subtitulo">
-                Acción: cerrar la puerta del corral.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if st.button("Probar puño cerrado",
-                     key="gesto_puno",
-                     use_container_width=True):
-
-            enviar_gesto(
-                "puno_cerrado",
-                "cerrar_puerta",
-                angulo=0
-            )
-
-        st.markdown("""
-        <div class="tarjeta">
-            <h3>👎 Pulgar abajo</h3>
-            <p class="subtitulo">
-                Acción: disminuir la ventilación.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if st.button("Probar pulgar abajo",
-                     key="gesto_pulgar_abajo",
-                     use_container_width=True):
-
-            nuevo = max(
-                st.session_state.get("nivel_ventilacion", 50) - 25,
-                0
-            )
-
-            st.session_state.nivel_ventilacion = nuevo
-
-            enviar_gesto(
-                "pulgar_abajo",
-                "disminuir_ventilacion",
-                porcentaje=nuevo,
-                pwm=int(nuevo * 255 / 100)
-            )
-
-
-# --------------------------------------------------
-# PESTAÑA TELEMETRÍA
-# --------------------------------------------------
-
-with tab_telemetria:
-
-    st.markdown("### Información del corral")
-
-    st.write(
-        "Consulta los datos que el ESP32 envía al sistema "
-        "mediante MQTT."
-    )
-
-    st.markdown("#### Datos recibidos")
-
-    if st.button(
-        "🔄 Consultar telemetría",
-        key="consultar_telemetria",
-        use_container_width=True
-    ):
-
-        datos = recibir_telemetria(TOPIC_TELEMETRIA)
-
-        if datos is not None:
-
-            st.session_state["telemetria_corral"] = datos
-            st.success("Telemetría recibida correctamente.")
-
-    datos_guardados = st.session_state.get(
-        "telemetria_corral"
-    )
-
-    if datos_guardados:
-
-        st.json(datos_guardados)
-
-        # Mostrar algunos valores si vienen en el JSON.
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            temperatura = datos_guardados.get("temperatura", "N/D")
-            st.metric("🌡️ Temperatura", temperatura)
-
-        with col2:
-            humedad = datos_guardados.get("humedad", "N/D")
-            st.metric("💧 Humedad", humedad)
-
-        with col3:
-            nivel = datos_guardados.get("nivel_agua", "N/D")
-            st.metric("📊 Nivel de agua", nivel)
+        for alert in alerts:
+            st.warning(alert)
 
     else:
-        st.info(
-            "Todavía no hay datos guardados. "
-            "Presiona 'Consultar telemetría' para recibir información."
+        st.success(
+            "✅ Temperatura y humedad dentro "
+            "de los rangos configurados."
         )
 
-    st.caption(f"Tópico: {TOPIC_TELEMETRIA}")
+
+# ---------------------------------
+# CÁMARA Y RECONOCIMIENTO DE GESTOS
+# ---------------------------------
+
+st.divider()
+
+st.subheader("📷 Cámara: reconocimiento de gestos")
+
+st.write(
+    "Permite el acceso a la cámara cuando el navegador "
+    "lo solicite. Mantén un gesto estable un instante "
+    "para evitar órdenes repetidas."
+)
+
+html_path = (
+    Path(__file__).resolve().parents[1]
+    / "camera_gestos.html"
+)
+
+if html_path.exists():
+
+    components.html(
+        html_path.read_text(encoding="utf-8"),
+        height=650,
+        scrolling=True
+    )
+
+else:
+
+    st.error(
+        "No se encontró camera_gestos.html "
+        "en la raíz del repositorio."
+    )
 
 
-# --------------------------------------------------
-# PIE DE PÁGINA
-# --------------------------------------------------
+# ---------------------------------
+# CONTROL POR ESCRITURA
+# ---------------------------------
 
-st.markdown("---")
+st.divider()
 
-st.markdown("""
-<div style="text-align:center; padding:15px;">
-    <p style="color:#64836d; font-size:13px;">
-        GranjaConecta | Tecnología para el campo 🌱
-    </p>
-</div>
-""", unsafe_allow_html=True)
+st.subheader("🎙️ Control por escritura")
+
+texto = st.text_input(
+    "Escribe una orden",
+    placeholder=(
+        "Ej.: abrir puerta, cerrar puerta, "
+        "subir ventilación..."
+    )
+)
+
+
+if st.button("Enviar orden escrita"):
+
+    t = texto.lower().strip()
+
+    mapping = {
+
+        "abrir puerta": "PUERTA_ABRIR",
+        "abre puerta": "PUERTA_ABRIR",
+
+        "cerrar puerta": "PUERTA_CERRAR",
+        "cierra puerta": "PUERTA_CERRAR",
+
+        "subir ventilacion": "VENTILACION_SUBIR",
+        "aumentar ventilacion": "VENTILACION_SUBIR",
+
+        "bajar ventilacion": "VENTILACION_BAJAR",
+        "disminuir ventilacion": "VENTILACION_BAJAR",
+
+        "subir humedad": "HUMEDAD_SUBIR",
+        "aumentar humedad": "HUMEDAD_SUBIR",
+
+        "bajar humedad": "HUMEDAD_BAJAR",
+        "disminuir humedad": "HUMEDAD_BAJAR",
+    }
+
+    cmd = mapping.get(t)
+
+    if cmd:
+
+        ok, msg = publish_command(cmd)
+
+        if ok:
+            st.success(msg)
+        else:
+            st.error(msg)
+
+    else:
+
+        st.warning(
+            "No reconocí esa orden. Prueba: abrir puerta, "
+            "cerrar puerta, subir ventilación, "
+            "bajar ventilación, subir humedad "
+            "o bajar humedad."
+        )
+
+
+# ---------------------------------
+# RESPUESTAS DEL ESP32
+# ---------------------------------
+
+st.subheader("Respuestas recientes del ESP32")
+
+responses = get_responses()
+
+if responses:
+
+    for item in reversed(responses[-5:]):
+        st.write(f"• {item}")
+
+else:
+
+    st.caption(
+        "Todavía no hay confirmaciones recibidas."
+    )
