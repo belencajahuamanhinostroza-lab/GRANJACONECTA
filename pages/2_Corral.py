@@ -1,14 +1,28 @@
 
-import json
+import sys
 from pathlib import Path
+
 import streamlit as st
 import streamlit.components.v1 as components
+
+# -----------------------------------------
+# RUTA PRINCIPAL DEL PROYECTO
+# -----------------------------------------
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from mqtt_utils import (
     get_latest_telemetry,
     get_responses,
-    publish_command,
     mqtt_status
 )
+
+# -----------------------------------------
+# CONFIGURACIÓN
+# -----------------------------------------
 
 st.set_page_config(
     page_title="Corral | GranjaConecta",
@@ -19,60 +33,99 @@ st.set_page_config(
 st.markdown("""
 <style>
 .stApp {
-    background: #f2fbf4;
+    background: #F1F8F2;
 }
 
 section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #123d2b, #1e6542);
+    background: linear-gradient(180deg, #123D2B, #286747);
 }
 
 section[data-testid="stSidebar"] * {
     color: white !important;
 }
 
-.barn {
-    background: linear-gradient(180deg, #dff3e5, #f9fff9);
-    border: 2px solid #b8d9c1;
-    border-radius: 20px;
-    padding: 18px;
-    text-align: center;
-}
-
-.barn-title {
-    font-size: 1.5rem;
+.main-title {
+    color: #174B32;
+    font-size: 36px;
     font-weight: 800;
-    color: #164b34;
 }
 
-.barn-door {
-    font-size: 5rem;
-    line-height: 1.2;
+.subtitle {
+    color: #63836C;
+    font-size: 14px;
 }
 
-.barn-note {
-    font-weight: 700;
-    color: #164b34;
+.section-title {
+    color: #174B32;
+    font-size: 22px;
+    font-weight: 750;
 }
+
+.metric-card {
+    background: white;
+    border-radius: 15px;
+    padding: 17px;
+    text-align: center;
+    border: 1px solid #DCEBDF;
+}
+
+.metric-value {
+    color: #174B32;
+    font-size: 27px;
+    font-weight: bold;
+}
+
+.metric-label {
+    color: #63836C;
+    font-size: 13px;
+}
+
+.barn-card {
+    border-radius: 20px;
+    padding: 20px;
+    text-align: center;
+    border: 2px solid #C8DDCC;
+}
+
+.gesture-card {
+    background: #F1F8F2;
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+    min-height: 95px;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
 
-# ---------------------------------
-# TÍTULO
-# ---------------------------------
+# -----------------------------------------
+# ENCABEZADO
+# -----------------------------------------
 
-st.title("🐄 Corral")
-
-st.write(
-    "Controla la puerta y la ventilación con gestos, "
-    "voz o escritura. El panel se actualiza con la "
-    "telemetría MQTT del ESP32."
+st.markdown(
+    '<div class="main-title">🐄 GranjaConecta</div>',
+    unsafe_allow_html=True
 )
 
+st.markdown(
+    '<div class="subtitle">MÓDULO DE CONTROL INTELIGENTE · CORRAL</div>',
+    unsafe_allow_html=True
+)
 
-# ---------------------------------
-# RECIBIR DATOS DEL ESP32
-# ---------------------------------
+st.write("")
+
+connected = mqtt_status()
+
+if connected:
+    st.success("Conexión MQTT activa")
+else:
+    st.warning("Conectando con el ESP32 mediante MQTT...")
+
+
+# -----------------------------------------
+# RECIBIR TELEMETRÍA
+# -----------------------------------------
 
 data = get_latest_telemetry()
 
@@ -80,178 +133,312 @@ temp = data.get("temperatura")
 hum = data.get("humedad")
 vent = data.get("ventilacion")
 
-door = str(
-    data.get("puerta", "Sin dato")
-).upper()
+door = str(data.get("puerta", "SIN DATO")).upper()
 
 
-# ---------------------------------
+def number_or_none(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+temp = number_or_none(temp)
+hum = number_or_none(hum)
+vent = number_or_none(vent)
+
+
+# -----------------------------------------
+# ESTADO DE LA PUERTA
+# -----------------------------------------
+
+if door in ["ABIERTA", "ABIERTO", "OPEN"]:
+    door_text = "PUERTA ABIERTA"
+    door_emoji = "🚪"
+    door_color = "#DDF2E1"
+
+elif door in ["CERRADA", "CERRADO", "CLOSED"]:
+    door_text = "PUERTA CERRADA"
+    door_emoji = "🚪"
+    door_color = "#DDF2E1"
+
+else:
+    door_text = "ESPERANDO ESTADO"
+    door_emoji = "🚪"
+    door_color = "#E9EFEA"
+
+
+# -----------------------------------------
 # COLOR DEL GRANERO SEGÚN TEMPERATURA
-# ---------------------------------
+# -----------------------------------------
 
 if temp is None:
-    barn_color = "#e7f3e9"
-    climate = "Esperando temperatura"
+    barn_color = "#E9EFEA"
+    climate_text = "Esperando temperatura"
 
-elif float(temp) >= 30:
-    barn_color = "#f6c18b"
-    climate = "Temperatura alta"
+elif temp >= 30:
+    barn_color = "#F6C18B"
+    climate_text = "Temperatura elevada"
 
-elif float(temp) <= 15:
-    barn_color = "#b8d9f4"
-    climate = "Temperatura baja"
-
-else:
-    barn_color = "#dff3e5"
-    climate = "Temperatura normal"
-
-
-# ---------------------------------
-# ESTADO VISUAL DE LA PUERTA
-# ---------------------------------
-
-if door in ("ABIERTA", "ABIERTO", "OPEN"):
-    door_icon = "🚪"
-    door_label = "Puerta abierta"
-
-elif door in ("CERRADA", "CERRADO", "CLOSED"):
-    door_icon = "🚪"
-    door_label = "Puerta cerrada"
+elif temp <= 15:
+    barn_color = "#B9DDF5"
+    climate_text = "Temperatura baja"
 
 else:
-    door_icon = "🚪"
-    door_label = "Estado de puerta sin confirmar"
+    barn_color = "#DDF0E2"
+    climate_text = "Temperatura normal"
 
 
-# ---------------------------------
+# -----------------------------------------
 # VAPOR SEGÚN HUMEDAD
-# ---------------------------------
+# -----------------------------------------
 
 if hum is None:
-    steam = "💨 Datos de humedad pendientes"
+    vapor = "💨"
+    humidity_text = "Esperando humedad"
 
-elif float(hum) >= 75:
-    steam = "🌫️🌫️🌫️ Humedad alta: mucho vapor"
+elif hum >= 75:
+    vapor = "🌫️ 🌫️ 🌫️"
+    humidity_text = "Humedad elevada"
 
-elif float(hum) <= 35:
-    steam = "💨 Humedad baja: poco vapor"
+elif hum <= 35:
+    vapor = "💨"
+    humidity_text = "Humedad baja"
 
 else:
-    steam = "Humedad normal: vapor habitual"
+    vapor = "🌫️"
+    humidity_text = "Humedad normal"
 
 
-# ---------------------------------
-# REPRESENTACIÓN DEL GRANERO
-# ---------------------------------
+# -----------------------------------------
+# GRANERO VISUAL
+# -----------------------------------------
 
 st.markdown(
-    f"""
-    <div class="barn" style="background:{barn_color};">
-
-        <div class="barn-title">
-            🏠 GRANERO · GRANJACONECTA
-        </div>
-
-        <div style="font-size:2rem;">
-            {steam}
-        </div>
-
-        <div class="barn-door">
-            {door_icon} 🐄
-        </div>
-
-        <div class="barn-note">
-            {door_label} · {climate}
-        </div>
-
-    </div>
-    """,
+    '<div class="section-title">🏠 Vista general del granero</div>',
     unsafe_allow_html=True
 )
 
+st.write("")
 
-# ---------------------------------
-# MÉTRICAS DEL CORRAL
-# ---------------------------------
+barn_html = f"""
+<div class="barn-card"
+     style="background:{barn_color};">
 
-st.subheader("Estado ambiental y del granero")
+    <h2 style="color:#75421F; margin-bottom:5px;">
+        GRANERO
+    </h2>
 
-m1, m2, m3, m4 = st.columns(4)
+    <div style="font-size:30px;">
+        ☀️ {vapor}
+    </div>
 
-m1.metric(
-    "Temperatura",
-    f"{temp} °C" if temp is not None else "—"
+    <div style="font-size:105px; line-height:1.4;">
+        🏠
+    </div>
+
+    <div style="font-size:55px;">
+        {door_emoji} 🐄 🌿
+    </div>
+
+    <h3 style="color:#174B32;">
+        {door_text}
+    </h3>
+
+    <p style="color:#47765A;">
+        {climate_text} · {humidity_text}
+    </p>
+
+</div>
+"""
+
+st.markdown(barn_html, unsafe_allow_html=True)
+
+st.caption(
+    "La representación de la puerta y las condiciones ambientales "
+    "se actualizará con los datos recibidos del ESP32."
 )
 
-m2.metric(
-    "Humedad",
-    f"{hum} %" if hum is not None else "—"
+
+# -----------------------------------------
+# INDICADORES AMBIENTALES
+# -----------------------------------------
+
+st.write("")
+
+st.markdown(
+    '<div class="section-title">📊 Estado del corral</div>',
+    unsafe_allow_html=True
 )
 
-m3.metric(
-    "Ventilación",
-    f"{vent} %" if vent is not None else "—"
+c1, c2, c3 = st.columns(3)
+
+with c1:
+    value = f"{temp:.1f} °C" if temp is not None else "—"
+
+    st.markdown(f"""
+    <div class="metric-card">
+        <div style="font-size:28px;">🌡️</div>
+        <div class="metric-value">{value}</div>
+        <div class="metric-label">Temperatura</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with c2:
+    value = f"{hum:.1f} %" if hum is not None else "—"
+
+    st.markdown(f"""
+    <div class="metric-card">
+        <div style="font-size:28px;">💧</div>
+        <div class="metric-value">{value}</div>
+        <div class="metric-label">Humedad</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with c3:
+    value = f"{vent:.0f} %" if vent is not None else "—"
+
+    st.markdown(f"""
+    <div class="metric-card">
+        <div style="font-size:28px;">🌬️</div>
+        <div class="metric-value">{value}</div>
+        <div class="metric-label">Ventilación</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# -----------------------------------------
+# CÁMARA Y RECONOCIMIENTO DE GESTOS
+# -----------------------------------------
+
+st.write("")
+st.divider()
+
+st.markdown(
+    '<div class="section-title">📷 Reconocimiento de gestos</div>',
+    unsafe_allow_html=True
 )
 
-m4.metric(
-    "Puerta",
-    door
+st.write(
+    "Coloca tu mano frente a la cámara para que el modelo "
+    "entrenado reconozca el gesto y envíe la orden al ESP32."
 )
 
+camera_path = ROOT_DIR / "camera_gestos.html"
 
-# ---------------------------------
-# ALERTAS
-# ---------------------------------
+if camera_path.exists():
 
-st.subheader("Alertas del corral")
+    components.html(
+        camera_path.read_text(encoding="utf-8"),
+        height=650,
+        scrolling=True
+    )
 
-hot = st.number_input(
-    "Alerta de temperatura alta (°C)",
-    value=30.0,
-    step=1.0
+else:
+
+    st.warning(
+        "La cámara estará disponible cuando agreguemos "
+        "camera_gestos.html a la carpeta principal del proyecto."
+    )
+
+
+# -----------------------------------------
+# TABLA DE LOS SEIS GESTOS
+# -----------------------------------------
+
+st.markdown(
+    '<div class="section-title">✋ Gestos configurados</div>',
+    unsafe_allow_html=True
 )
 
-cold = st.number_input(
-    "Alerta de temperatura baja (°C)",
-    value=15.0,
-    step=1.0
+gestures = [
+    ("✋", "Mano abierta", "Abrir puerta"),
+    ("✊", "Puño cerrado", "Cerrar puerta"),
+    ("👍", "Pulgar arriba", "Subir ventilación"),
+    ("👎", "Pulgar abajo", "Bajar ventilación"),
+    ("👉", "Índice derecha", "Bajar humedad"),
+    ("👈", "Índice izquierda", "Subir humedad"),
+]
+
+columns = st.columns(3)
+
+for index, (emoji, gesture, action) in enumerate(gestures):
+
+    with columns[index % 3]:
+
+        st.markdown(f"""
+        <div class="gesture-card">
+            <div style="font-size:32px;">{emoji}</div>
+            <b style="color:#174B32;">{gesture}</b>
+            <div style="font-size:12px; color:#63836C;">
+                {action}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.write("")
+
+
+# -----------------------------------------
+# ALERTAS AMBIENTALES
+# -----------------------------------------
+
+st.divider()
+
+st.markdown(
+    '<div class="section-title">🔔 Alertas ambientales</div>',
+    unsafe_allow_html=True
 )
 
-humid_high = st.number_input(
-    "Alerta de humedad alta (%)",
-    value=75.0,
-    step=1.0
-)
+with st.expander("Configurar límites de alerta"):
 
-humid_low = st.number_input(
-    "Alerta de humedad baja (%)",
-    value=35.0,
-    step=1.0
-)
+    col1, col2 = st.columns(2)
+
+    with col1:
+        temp_high = st.number_input(
+            "Temperatura máxima (°C)",
+            value=30.0
+        )
+
+        temp_low = st.number_input(
+            "Temperatura mínima (°C)",
+            value=15.0
+        )
+
+    with col2:
+        hum_high = st.number_input(
+            "Humedad máxima (%)",
+            value=75.0
+        )
+
+        hum_low = st.number_input(
+            "Humedad mínima (%)",
+            value=35.0
+        )
 
 
 if temp is None or hum is None:
 
     st.info(
-        "Esperando telemetría del ESP32. "
-        "Inicia Wokwi y comprueba la conexión MQTT."
+        "Esperando datos de los sensores DHT22. "
+        "Comprueba que Wokwi esté ejecutándose."
     )
 
 else:
 
     alerts = []
 
-    if float(temp) >= hot:
-        alerts.append("🌡️ Temperatura elevada.")
+    if temp >= temp_high:
+        alerts.append("🌡️ Temperatura demasiado alta.")
 
-    if float(temp) <= cold:
-        alerts.append("🥶 Temperatura baja.")
+    if temp <= temp_low:
+        alerts.append("🥶 Temperatura demasiado baja.")
 
-    if float(hum) >= humid_high:
-        alerts.append("💧 Humedad elevada: hay mucho vapor.")
+    if hum >= hum_high:
+        alerts.append("💧 Humedad demasiado alta.")
 
-    if float(hum) <= humid_low:
-        alerts.append("🌵 Humedad baja: hay poco vapor.")
+    if hum <= hum_low:
+        alerts.append("🌵 Humedad demasiado baja.")
 
     if alerts:
 
@@ -259,125 +446,53 @@ else:
             st.warning(alert)
 
     else:
+
         st.success(
-            "✅ Temperatura y humedad dentro "
-            "de los rangos configurados."
+            "✅ El ambiente del corral está dentro "
+            "de los límites configurados."
         )
 
 
-# ---------------------------------
-# CÁMARA Y RECONOCIMIENTO DE GESTOS
-# ---------------------------------
-
-st.divider()
-
-st.subheader("📷 Cámara: reconocimiento de gestos")
-
-st.write(
-    "Permite el acceso a la cámara cuando el navegador "
-    "lo solicite. Mantén un gesto estable un instante "
-    "para evitar órdenes repetidas."
-)
-
-html_path = (
-    Path(__file__).resolve().parents[1]
-    / "camera_gestos.html"
-)
-
-if html_path.exists():
-
-    components.html(
-        html_path.read_text(encoding="utf-8"),
-        height=650,
-        scrolling=True
-    )
-
-else:
-
-    st.error(
-        "No se encontró camera_gestos.html "
-        "en la raíz del repositorio."
-    )
-
-
-# ---------------------------------
-# CONTROL POR ESCRITURA
-# ---------------------------------
-
-st.divider()
-
-st.subheader("🎙️ Control por escritura")
-
-texto = st.text_input(
-    "Escribe una orden",
-    placeholder=(
-        "Ej.: abrir puerta, cerrar puerta, "
-        "subir ventilación..."
-    )
-)
-
-
-if st.button("Enviar orden escrita"):
-
-    t = texto.lower().strip()
-
-    mapping = {
-
-        "abrir puerta": "PUERTA_ABRIR",
-        "abre puerta": "PUERTA_ABRIR",
-
-        "cerrar puerta": "PUERTA_CERRAR",
-        "cierra puerta": "PUERTA_CERRAR",
-
-        "subir ventilacion": "VENTILACION_SUBIR",
-        "aumentar ventilacion": "VENTILACION_SUBIR",
-
-        "bajar ventilacion": "VENTILACION_BAJAR",
-        "disminuir ventilacion": "VENTILACION_BAJAR",
-
-        "subir humedad": "HUMEDAD_SUBIR",
-        "aumentar humedad": "HUMEDAD_SUBIR",
-
-        "bajar humedad": "HUMEDAD_BAJAR",
-        "disminuir humedad": "HUMEDAD_BAJAR",
-    }
-
-    cmd = mapping.get(t)
-
-    if cmd:
-
-        ok, msg = publish_command(cmd)
-
-        if ok:
-            st.success(msg)
-        else:
-            st.error(msg)
-
-    else:
-
-        st.warning(
-            "No reconocí esa orden. Prueba: abrir puerta, "
-            "cerrar puerta, subir ventilación, "
-            "bajar ventilación, subir humedad "
-            "o bajar humedad."
-        )
-
-
-# ---------------------------------
+# -----------------------------------------
 # RESPUESTAS DEL ESP32
-# ---------------------------------
+# -----------------------------------------
 
-st.subheader("Respuestas recientes del ESP32")
+st.divider()
+
+st.markdown(
+    '<div class="section-title">📡 Confirmaciones del ESP32</div>',
+    unsafe_allow_html=True
+)
 
 responses = get_responses()
 
 if responses:
 
-    for item in reversed(responses[-5:]):
-        st.write(f"• {item}")
+    for response in reversed(responses[-5:]):
+
+        if isinstance(response, dict):
+            message = (
+                response.get("mensaje")
+                or response.get("respuesta")
+                or str(response)
+            )
+        else:
+            message = str(response)
+
+        st.info(message)
 
 else:
 
     st.caption(
-        "Todavía no hay confirmaciones recibidas."
+        "Todavía no se han recibido confirmaciones."
     )
+
+
+# -----------------------------------------
+# PIE DE PÁGINA
+# -----------------------------------------
+
+st.write("")
+st.caption(
+    "GRANJACONECTA · TECNOLOGÍA PARA EL CAMPO"
+)
