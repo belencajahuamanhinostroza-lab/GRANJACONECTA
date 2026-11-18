@@ -1,153 +1,83 @@
 
-import json
-import re
-import sys
-import threading
-from pathlib import Path
-from io import BytesIO
-
-import numpy as np
 import streamlit as st
 import streamlit.components.v1 as components
+import paho.mqtt.client as mqtt
+import json
+import os
+import re
+import uuid
+import hashlib
+import threading
+import numpy as np
 from PIL import Image
+from tensorflow.keras.models import load_model
 
 # =========================================================
-# 1. CONFIGURACIÓN GENERAL
+# CONFIGURACIÓN GENERAL
 # =========================================================
 
-ROOT = Path(__file__).resolve().parents[1]
+st.set_page_config(
+    page_title="GranjaConecta | Corral",
+    page_icon="🐄",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-MODEL_PATH = ROOT / "keras_model.h5"
-LABELS_PATH = ROOT / "labels.txt"
+# =========================================================
+# MQTT
+# =========================================================
 
 BROKER = "broker.mqttdashboard.com"
-PORT = 1883
+PUERTO = 1883
 
 TOPICO_COMANDOS = "granjaconecta/comandos"
 TOPICO_TELEMETRIA = "granjaconecta/telemetria"
 TOPICO_RESPUESTAS = "granjaconecta/respuestas"
 
-st.set_page_config(
-    page_title="GranjaConecta - Corral",
-    page_icon="🐄",
-    layout="wide"
-)
-
-# =========================================================
-# 2. DISEÑO GENERAL
-# =========================================================
-
-st.markdown("""
-<style>
-.stApp {
-    background: #f2f8f2;
-}
-
-h1, h2, h3 {
-    color: #24583b;
-}
-
-.titulo {
-    color: #24583b;
-    font-size: 34px;
-    font-weight: 800;
-    margin-bottom: 0;
-}
-
-.subtitulo {
-    color: #66816d;
-    margin-bottom: 20px;
-}
-
-div[data-testid="stMetric"] {
-    background: white;
-    border: 1px solid #e0ebe1;
-    padding: 14px;
-    border-radius: 12px;
-}
-
-.resultado {
-    background: #edf8ef;
-    border-left: 5px solid #29945b;
-    padding: 15px;
-    border-radius: 10px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown(
-    '<div class="titulo">🐄 GranjaConecta - Corral</div>',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '<div class="subtitulo">'
-    'Escenario virtual y reconocimiento de gestos'
-    '</div>',
-    unsafe_allow_html=True
-)
-
-# =========================================================
-# 3. CONEXIÓN MQTT DIRECTA
-# =========================================================
-
+# Estado compartido del cliente MQTT
 @st.cache_resource
-def iniciar_mqtt():
-    import paho.mqtt.client as mqtt
+def obtener_mqtt():
 
     estado = {
         "conectado": False,
         "telemetria": {},
-        "respuestas": [],
-        "error": ""
+        "respuesta": "Esperando información del ESP32...",
+        "ultimo_mensaje": ""
     }
 
     bloqueo = threading.Lock()
 
     def al_conectar(client, userdata, flags, reason_code, properties):
         if reason_code == 0:
-            with bloqueo:
-                estado["conectado"] = True
-                estado["error"] = ""
-
+            estado["conectado"] = True
             client.subscribe(TOPICO_TELEMETRIA)
             client.subscribe(TOPICO_RESPUESTAS)
-
         else:
-            with bloqueo:
-                estado["conectado"] = False
-                estado["error"] = f"Error de conexión: {reason_code}"
-
-    def al_desconectar(client, userdata, disconnect_flags,
-                       reason_code, properties):
-        with bloqueo:
             estado["conectado"] = False
 
-    def al_recibir(client, userdata, msg):
-        contenido = msg.payload.decode("utf-8", errors="replace")
+    def al_desconectar(client, userdata, disconnect_flags, reason_code, properties):
+        estado["conectado"] = False
 
-        with bloqueo:
-            if msg.topic == TOPICO_TELEMETRIA:
-                try:
+    def al_recibir(client, userdata, mensaje):
+        try:
+            contenido = mensaje.payload.decode("utf-8")
+
+            with bloqueo:
+                estado["ultimo_mensaje"] = contenido
+
+                if mensaje.topic == TOPICO_TELEMETRIA:
                     datos = json.loads(contenido)
+                    estado["telemetria"].update(datos)
 
-                    if isinstance(datos, dict):
-                        estado["telemetria"] = datos
+                elif mensaje.topic == TOPICO_RESPUESTAS:
+                    estado["respuesta"] = contenido
 
-                except json.JSONDecodeError:
-                    estado["error"] = "Telemetría recibida con formato inválido"
-
-            elif msg.topic == TOPICO_RESPUESTAS:
-                estado["respuestas"].append(contenido)
-                estado["respuestas"] = estado["respuestas"][-20:]
+        except Exception as error:
+            estado["respuesta"] = f"Error al recibir MQTT: {error}"
 
     cliente = mqtt.Client(
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-        client_id="GranjaConecta_Corral",
-        protocol=mqtt.MQTTv311
+        client_id=f"GranjaConecta_Corral_{uuid.uuid4().hex[:8]}"
     )
 
     cliente.on_connect = al_conectar
@@ -155,873 +85,874 @@ def iniciar_mqtt():
     cliente.on_message = al_recibir
 
     try:
-        cliente.connect(BROKER, PORT, keepalive=60)
+        cliente.connect(BROKER, PUERTO, 60)
         cliente.loop_start()
-
     except Exception as error:
-        with bloqueo:
-            estado["error"] = str(error)
+        estado["respuesta"] = f"No se pudo conectar: {error}"
 
-    return cliente, estado, bloqueo
-
-
-try:
-    cliente_mqtt, mqtt_estado, mqtt_bloqueo = iniciar_mqtt()
-except Exception as error:
-    cliente_mqtt = None
-    mqtt_estado = {
-        "conectado": False,
-        "telemetria": {},
-        "respuestas": [],
-        "error": str(error)
-    }
-    mqtt_bloqueo = None
+    return cliente, estado
 
 
-def obtener_estado_mqtt():
-    if mqtt_bloqueo is None:
-        return mqtt_estado.copy()
-
-    with mqtt_bloqueo:
-        return {
-            "conectado": mqtt_estado["conectado"],
-            "telemetria": dict(mqtt_estado["telemetria"]),
-            "respuestas": list(mqtt_estado["respuestas"]),
-            "error": mqtt_estado["error"]
-        }
+cliente, estado_mqtt = obtener_mqtt()
 
 
 def enviar_comando(comando):
-    if cliente_mqtt is None:
-        return False, "No existe conexión MQTT."
-
-    if not cliente_mqtt.is_connected():
-        return False, "El broker MQTT no está conectado."
-
-    mensaje = json.dumps({"comando": comando})
-
-    resultado = cliente_mqtt.publish(
-        TOPICO_COMANDOS,
-        mensaje,
-        qos=0,
-        retain=False
-    )
-
-    if resultado.rc == 0:
-        return True, f"Comando enviado: {comando}"
-
-    return False, "No se pudo publicar el comando MQTT."
-
-
-estado_mqtt = obtener_estado_mqtt()
-telemetria = estado_mqtt["telemetria"]
-
-# =========================================================
-# 4. FUNCIONES DE LECTURA
-# =========================================================
-
-def obtener_numero(datos, clave, valor_default):
+    """Envía un comando al ESP32 mediante MQTT."""
     try:
-        return float(datos.get(clave, valor_default))
-    except (TypeError, ValueError, AttributeError):
-        return float(valor_default)
+        mensaje = json.dumps({"comando": comando})
+        resultado = cliente.publish(TOPICO_COMANDOS, mensaje)
 
+        if resultado.rc == mqtt.MQTT_ERR_SUCCESS:
+            st.toast(f"Orden enviada: {comando}", icon="📡")
+        else:
+            st.warning("No se pudo enviar la orden MQTT.")
 
-def interpretar_puerta(valor):
-    if isinstance(valor, bool):
-        return valor
+    except Exception as error:
+        st.error(f"Error al enviar comando: {error}")
 
-    if isinstance(valor, (int, float)):
-        return valor != 0
-
-    texto = str(valor).strip().lower()
-
-    return texto in [
-        "abierta", "abierto", "open",
-        "1", "true", "on"
-    ]
-
-
-temperatura = obtener_numero(
-    telemetria, "temperatura", 28
-)
-
-humedad_sensor = obtener_numero(
-    telemetria, "humedad", 60
-)
-
-ventilacion = obtener_numero(
-    telemetria, "ventilacion", 50
-)
-
-puerta_abierta = interpretar_puerta(
-    telemetria.get("puerta", "cerrada")
-)
 
 # =========================================================
-# 5. MODELO KERAS Y ETIQUETAS
+# CARGA DEL MODELO TEACHABLE MACHINE
 # =========================================================
+
+RUTA_MODELO = "keras_model.h5"
+RUTA_ETIQUETAS = "labels.txt"
+
 
 @st.cache_resource
 def cargar_modelo():
-    from tensorflow.keras.models import load_model
-    return load_model(str(MODEL_PATH), compile=False)
+    if not os.path.exists(RUTA_MODELO):
+        return None
+
+    return load_model(RUTA_MODELO, compile=False)
 
 
+@st.cache_data
 def cargar_etiquetas():
-    etiquetas = []
+    if not os.path.exists(RUTA_ETIQUETAS):
+        return []
 
-    with open(LABELS_PATH, "r", encoding="utf-8") as archivo:
-        for linea in archivo:
-            linea = linea.strip()
-
-            if not linea:
-                continue
-
-            # Ejemplo: "0 Abrir puerta" -> "Abrir puerta"
-            linea = re.sub(r"^\d+\s+", "", linea)
-            etiquetas.append(linea)
-
-    return etiquetas
+    with open(RUTA_ETIQUETAS, "r", encoding="utf-8") as archivo:
+        return [
+            re.sub(r"^\s*\d+\s+", "", linea.strip())
+            for linea in archivo
+            if linea.strip()
+        ]
 
 
-# El índice corresponde al orden de labels.txt.
-# Las clases 2 y 3 controlan ventilación aunque
-# sus etiquetas originales mencionen temperatura.
+modelo = None
+etiquetas = []
+
+try:
+    modelo = cargar_modelo()
+    etiquetas = cargar_etiquetas()
+except Exception as error:
+    st.error(f"No se pudo cargar el modelo: {error}")
+
+
+# =========================================================
+# MAPEO DE LOS SEIS GESTOS
+# =========================================================
 
 GESTOS = {
     0: {
+        "nombre": "Abrir puerta",
+        "emoji": "✋",
+        "accion": "Abrir la puerta del granero",
         "comando": "PUERTA_ABRIR",
-        "accion": "Abrir la puerta del corral",
-        "icono": "🚪"
+        "color": "#16a34a"
     },
     1: {
+        "nombre": "Cerrar puerta",
+        "emoji": "✊",
+        "accion": "Cerrar la puerta del granero",
         "comando": "PUERTA_CERRAR",
-        "accion": "Cerrar la puerta del corral",
-        "icono": "🚪"
+        "color": "#dc2626"
     },
     2: {
-        "comando": "VENTILACION_SUBIR",
+        "nombre": "Subir ventilación",
+        "emoji": "👍",
         "accion": "Aumentar la ventilación",
-        "icono": "🌀"
+        "comando": "VENTILACION_SUBIR",
+        "color": "#0ea5e9"
     },
     3: {
-        "comando": "VENTILACION_BAJAR",
+        "nombre": "Bajar ventilación",
+        "emoji": "👎",
         "accion": "Disminuir la ventilación",
-        "icono": "💨"
+        "comando": "VENTILACION_BAJAR",
+        "color": "#0ea5e9"
     },
     4: {
-        "comando": "HUMEDAD_SUBIR",
+        "nombre": "Subir humedad visual",
+        "emoji": "✌️",
         "accion": "Aumentar la niebla visual",
-        "icono": "🌫️"
+        "comando": "HUMEDAD_SUBIR",
+        "color": "#8b5cf6"
     },
     5: {
-        "comando": "HUMEDAD_BAJAR",
+        "nombre": "Bajar humedad visual",
+        "emoji": "🔄✌️",
         "accion": "Disminuir la niebla visual",
-        "icono": "☀️"
+        "comando": "HUMEDAD_BAJAR",
+        "color": "#8b5cf6"
     }
 }
 
+# Los índices corresponden al orden de las seis clases
+# del modelo Teachable Machine entregado.
+
+
 # =========================================================
-# 6. VARIABLES DE SESIÓN
+# ESTADO VISUAL
 # =========================================================
 
 if "humedad_visual" not in st.session_state:
     st.session_state.humedad_visual = 50
 
 if "ultimo_gesto" not in st.session_state:
-    st.session_state.ultimo_gesto = "Esperando gesto"
+    st.session_state.ultimo_gesto = None
 
 if "ultima_confianza" not in st.session_state:
     st.session_state.ultima_confianza = 0.0
 
-if "ultima_accion" not in st.session_state:
-    st.session_state.ultima_accion = "Sin acción"
+if "ultima_imagen" not in st.session_state:
+    st.session_state.ultima_imagen = None
 
 if "ultimo_comando" not in st.session_state:
-    st.session_state.ultimo_comando = "Ninguno"
+    st.session_state.ultimo_comando = None
 
-if "mensaje_resultado" not in st.session_state:
-    st.session_state.mensaje_resultado = ""
 
 # =========================================================
-# 7. ESCENARIO ANIMADO 2D
+# PROCESAMIENTO DE LA CÁMARA
 # =========================================================
 
-def crear_escenario(temp, humedad, ventilacion, puerta_abierta):
+def reconocer_gesto(imagen_archivo):
 
-    if temp >= 30:
-        cielo = "#f3c38e"
-        granero = "#d77a42"
-        estado_temp = "Ambiente caliente"
-        calor = "0.35"
+    imagen = Image.open(imagen_archivo).convert("RGB")
+    imagen = imagen.resize((224, 224))
 
-    elif temp <= 15:
-        cielo = "#b9d9ed"
-        granero = "#76a9c7"
-        estado_temp = "Ambiente frío"
-        calor = "0"
+    arreglo = np.asarray(imagen, dtype=np.float32)
 
+    # Normalización utilizada en el ejemplo del modelo
+    datos = np.expand_dims((arreglo / 127.0) - 1.0, axis=0)
+
+    predicciones = modelo.predict(datos, verbose=0)[0]
+
+    indice = int(np.argmax(predicciones))
+    confianza = float(predicciones[indice])
+
+    return indice, confianza
+
+
+# =========================================================
+# DISEÑO GENERAL Y FONDO
+# =========================================================
+
+st.markdown("""
+<style>
+
+/* Fondo completo de la aplicación */
+.stApp {
+    background:
+        linear-gradient(
+            135deg,
+            #e8f5e9 0%,
+            #d9edda 45%,
+            #edf7e9 100%
+        );
+}
+
+/* Contenedor principal */
+section.main {
+    background: transparent;
+}
+
+.block-container {
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+    max-width: 1500px;
+}
+
+/* Barra lateral verde oscuro */
+[data-testid="stSidebar"] {
+    background: linear-gradient(
+        180deg,
+        #123d25 0%,
+        #174d2d 55%,
+        #0d321e 100%
+    );
+}
+
+[data-testid="stSidebar"] * {
+    color: #ffffff !important;
+}
+
+/* Ocultar menú y pie */
+#MainMenu {
+    visibility: hidden;
+}
+
+footer {
+    visibility: hidden;
+}
+
+/* Títulos */
+h1, h2, h3 {
+    color: #173d26;
+}
+
+/* Tarjetas */
+.tarjeta {
+    background: rgba(255,255,255,0.92);
+    border: 1px solid #d4e6d3;
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 5px 18px rgba(24, 65, 37, 0.09);
+}
+
+/* Encabezado */
+.encabezado {
+    background: linear-gradient(100deg, #164b2d, #287647);
+    color: white;
+    padding: 20px 25px;
+    border-radius: 18px;
+    margin-bottom: 18px;
+    box-shadow: 0 5px 16px rgba(20,60,35,.18);
+}
+
+.encabezado h1 {
+    color: white !important;
+    margin: 0;
+}
+
+.encabezado p {
+    color: #e3f5e6;
+    margin: 5px 0 0 0;
+}
+
+/* Indicadores */
+.indicador {
+    background: white;
+    padding: 13px;
+    border-radius: 14px;
+    border: 1px solid #d6e8d5;
+    text-align: center;
+    min-height: 100px;
+}
+
+.valor {
+    font-size: 25px;
+    font-weight: 800;
+    color: #174b2b;
+}
+
+.nombre-indicador {
+    font-size: 13px;
+    color: #58735d;
+}
+
+/* Etiquetas */
+.estado-normal {
+    color: #15803d;
+    font-weight: 800;
+}
+
+.estado-alerta {
+    color: #d97706;
+    font-weight: 800;
+}
+
+.estado-critico {
+    color: #dc2626;
+    font-weight: 900;
+}
+
+/* Cámara */
+[data-testid="stCameraInput"] {
+    border-radius: 15px;
+    overflow: hidden;
+}
+
+/* Botones */
+.stButton > button {
+    border-radius: 12px;
+    font-weight: 700;
+}
+
+/* Texto */
+p, label {
+    color: #294d32;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# =========================================================
+# BARRA LATERAL
+# =========================================================
+
+with st.sidebar:
+    st.markdown("## 🐄 GranjaConecta")
+    st.markdown("---")
+
+    st.markdown("### 🌾 Panel del corral")
+    st.write("Control inteligente del ambiente ganadero.")
+
+    st.markdown("---")
+
+    if estado_mqtt["conectado"]:
+        st.success("🟢 Conectado al ESP32")
     else:
-        cielo = "#a9d9ee"
-        granero = "#e5a16c"
-        estado_temp = "Temperatura normal"
-        calor = "0"
+        st.warning("🟡 Conectando con MQTT...")
 
-    humedad = max(0, min(100, humedad))
-    ventilacion = max(0, min(100, ventilacion))
+    st.markdown("---")
+    st.markdown("### 📡 Comunicación")
+    st.caption(BROKER)
+    st.caption(f"Puerto: {PUERTO}")
 
-    duracion = max(
-        0.15,
-        2.5 - (ventilacion / 100) * 2.3
-    )
-
-    puerta_css = (
-        "translateX(105%)"
-        if puerta_abierta
-        else "translateX(0)"
-    )
-
-    estado_puerta = (
-        "ABIERTA" if puerta_abierta else "CERRADA"
-    )
-
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta charset="UTF-8">
-
-    <style>
-    * { box-sizing: border-box; }
-
-    body {
-        margin: 0;
-        font-family: Arial, sans-serif;
-        overflow: hidden;
-    }
-
-    .scene {
-        position: relative;
-        height: 510px;
-        width: 100%;
-        overflow: hidden;
-        border-radius: 20px;
-        background: linear-gradient(
-            to bottom,
-            __CIELO__ 0%,
-            #d8edce 72%,
-            #85b96b 73%,
-            #55934c 100%
-        );
-    }
-
-    .sun {
-        position: absolute;
-        top: 30px;
-        right: 12%;
-        width: 75px;
-        height: 75px;
-        border-radius: 50%;
-        background: #ffe58a;
-        box-shadow: 0 0 35px #ffe58a;
-        animation: pulse 4s infinite alternate;
-    }
-
-    @keyframes pulse {
-        to { transform: scale(1.12); }
-    }
-
-    .cloud {
-        position: absolute;
-        top: 50px;
-        left: 10%;
-        font-size: 55px;
-        animation: cloud 18s linear infinite alternate;
-    }
-
-    @keyframes cloud {
-        to { transform: translateX(100px); }
-    }
-
-    .tree {
-        position: absolute;
-        bottom: 85px;
-        left: 4%;
-        font-size: 95px;
-    }
-
-    .barn {
-        position: absolute;
-        bottom: 75px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: min(590px, 76%);
-        height: 330px;
-    }
-
-    .roof {
-        position: absolute;
-        top: 0;
-        left: -4%;
-        width: 108%;
-        height: 100px;
-        background: #a94e37;
-        clip-path: polygon(50% 0, 100% 100%, 0 100%);
-        z-index: 2;
-    }
-
-    .barn-body {
-        position: absolute;
-        top: 70px;
-        width: 100%;
-        height: 260px;
-        background: __GRANERO__;
-        border: 7px solid #874c35;
-    }
-
-    .window {
-        position: absolute;
-        top: 40px;
-        width: 75px;
-        height: 70px;
-        background: #bde9f5;
-        border: 8px solid #75452f;
-    }
-
-    .left { left: 45px; }
-    .right { right: 45px; }
-
-    .fan {
-        position: absolute;
-        top: 115px;
-        left: 50%;
-        font-size: 54px;
-        animation: spin __DURACION__s linear infinite;
-    }
-
-    @keyframes spin {
-        from { transform: translateX(-50%) rotate(0deg); }
-        to { transform: translateX(-50%) rotate(360deg); }
-    }
-
-    .door-frame {
-        position: absolute;
-        bottom: 0;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 150px;
-        height: 180px;
-        background: #56331f;
-        border: 8px solid #f0c58d;
-        overflow: hidden;
-    }
-
-    .door {
-        position: absolute;
-        inset: 0;
-        background: #754323;
-        transform: __PUERTA__;
-        transition: transform 1.2s ease-in-out;
-        border-left: 6px solid #d5a46d;
-        background-image: repeating-linear-gradient(
-            90deg,
-            transparent 0,
-            transparent 35px,
-            rgba(0,0,0,.16) 36px,
-            rgba(0,0,0,.16) 40px
-        );
-    }
-
-    .knob {
-        position: absolute;
-        right: 15px;
-        top: 50%;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #f8d77b;
-    }
-
-    .cow {
-        position: absolute;
-        bottom: 80px;
-        left: 20%;
-        font-size: 90px;
-        z-index: 5;
-        animation: cow 3s ease-in-out infinite alternate;
-    }
-
-    @keyframes cow {
-        to { transform: translateY(-5px); }
-    }
-
-    .ground {
-        position: absolute;
-        bottom: 0;
-        height: 90px;
-        width: 100%;
-        background: #65a354;
-        z-index: 1;
-    }
-
-    .grass {
-        position: absolute;
-        bottom: 5px;
-        width: 100%;
-        text-align: center;
-        font-size: 30px;
-        z-index: 6;
-    }
-
-    .fog {
-        position: absolute;
-        inset: 80px 0 65px 0;
-        opacity: __NIEBLA__;
-        pointer-events: none;
-        background:
-            radial-gradient(ellipse at 35% 70%,
-            rgba(255,255,255,.8), transparent 40%),
-            radial-gradient(ellipse at 70% 55%,
-            rgba(255,255,255,.75), transparent 42%);
-        animation: fog 7s ease-in-out infinite alternate;
-        z-index: 4;
-    }
-
-    @keyframes fog {
-        from { transform: translateX(-15px); }
-        to { transform: translateX(20px); }
-    }
-
-    .heat {
-        position: absolute;
-        inset: 0;
-        background: rgba(255, 110, 35, __CALOR__);
-        pointer-events: none;
-        mix-blend-mode: screen;
-        animation: heat 2s infinite alternate;
-        z-index: 7;
-    }
-
-    @keyframes heat {
-        from { opacity: .10; }
-        to { opacity: .30; }
-    }
-
-    .info {
-        position: absolute;
-        top: 14px;
-        left: 14px;
-        z-index: 10;
-        background: rgba(255,255,255,.92);
-        padding: 11px 14px;
-        border-radius: 12px;
-        color: #28543b;
-        font-size: 13px;
-        line-height: 1.7;
-        font-weight: bold;
-    }
-
-    .door-status {
-        position: absolute;
-        bottom: 12px;
-        right: 15px;
-        z-index: 10;
-        background: rgba(255,255,255,.9);
-        padding: 8px 12px;
-        border-radius: 10px;
-        color: #28543b;
-        font-weight: bold;
-        font-size: 13px;
-    }
-
-    @media(max-width: 600px) {
-        .scene { height: 390px; }
-        .barn { width: 85%; height: 260px; }
-        .barn-body { height: 205px; }
-        .door-frame { width: 105px; height: 130px; }
-        .cow { font-size: 60px; left: 8%; }
-        .tree { font-size: 65px; }
-        .fan { font-size: 40px; }
-    }
-    </style>
-    </head>
-
-    <body>
-    <div class="scene">
-
-        <div class="sun"></div>
-        <div class="cloud">☁️</div>
-        <div class="tree">🌳</div>
-
-        <div class="info">
-            🌡️ __TEMP__ °C · __ESTADO_TEMP__
-            <br>
-            💧 Humedad visual: __HUMEDAD__ %
-            <br>
-            🌀 Ventilación: __VENTILACION__ %
-        </div>
-
-        <div class="barn">
-            <div class="roof"></div>
-
-            <div class="barn-body">
-                <div class="window left"></div>
-                <div class="window right"></div>
-
-                <div class="fan">🌀</div>
-
-                <div class="door-frame">
-                    <div class="door">
-                        <div class="knob"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="cow">🐄</div>
-        <div class="fog"></div>
-        <div class="ground"></div>
-        <div class="grass">🌿 🌱 🌾 🌿 🌱 🌾 🌿</div>
-
-        <div class="door-status">
-            🚪 PUERTA __ESTADO_PUERTA__
-        </div>
-
-        <div class="heat"></div>
-
-    </div>
-    </body>
-    </html>
-    """
-
-    reemplazos = {
-        "__CIELO__": cielo,
-        "__GRANERO__": granero,
-        "__DURACION__": f"{duracion:.2f}",
-        "__PUERTA__": puerta_css,
-        "__NIEBLA__": f"{humedad / 100:.2f}",
-        "__CALOR__": calor,
-        "__TEMP__": f"{temp:.1f}",
-        "__ESTADO_TEMP__": estado_temp,
-        "__HUMEDAD__": f"{humedad:.0f}",
-        "__VENTILACION__": f"{ventilacion:.0f}",
-        "__ESTADO_PUERTA__": estado_puerta
-    }
-
-    for clave, valor in reemplazos.items():
-        html = html.replace(clave, valor)
-
-    return html
+    st.markdown("---")
+    st.markdown("### 🎮 Gestos disponibles")
+    st.write("✋ Abrir puerta")
+    st.write("✊ Cerrar puerta")
+    st.write("👍 Subir ventilación")
+    st.write("👎 Bajar ventilación")
+    st.write("✌️ Subir humedad visual")
+    st.write("🔄✌️ Bajar humedad visual")
 
 
 # =========================================================
-# 8. ESCENARIO GRANDE
+# ENCABEZADO
 # =========================================================
 
-st.markdown("### 🌳 Escenario virtual del corral")
+st.markdown("""
+<div class="encabezado">
+    <h1>🐄 Interior del corral</h1>
+    <p>
+        Observa el ambiente del granero y controla sus funciones
+        mediante reconocimiento de gestos.
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
-escenario = crear_escenario(
-    temperatura,
-    st.session_state.humedad_visual,
-    ventilacion,
-    puerta_abierta
-)
-
-components.html(
-    escenario,
-    height=525,
-    scrolling=False
-)
 
 # =========================================================
-# 9. INDICADORES
+# LECTURA DE TELEMETRÍA
 # =========================================================
 
-st.markdown("### 📊 Supervisión del corral")
+telemetria = estado_mqtt["telemetria"]
 
-c1, c2, c3 = st.columns(3)
+temperatura = telemetria.get("temperatura", None)
+humedad = telemetria.get("humedad", None)
+ventilacion = telemetria.get("ventilacion", 0)
+puerta = telemetria.get("puerta", "CERRADA")
 
-c1.metric(
-    "🌡️ Temperatura medida",
-    f"{temperatura:.1f} °C"
-)
+try:
+    ventilacion = float(ventilacion)
+except (ValueError, TypeError):
+    ventilacion = 0
 
-c2.metric(
-    "💧 Humedad medida",
-    f"{humedad_sensor:.1f} %"
-)
+puerta_texto = str(puerta).upper()
 
-c3.metric(
-    "🌀 Ventilación",
-    f"{ventilacion:.0f} %"
-)
+if puerta_texto in ["1", "TRUE", "ABIERTA", "ABIERTO", "OPEN"]:
+    puerta_abierta = True
+else:
+    puerta_abierta = False
 
-st.caption(
-    "La humedad visual del escenario es independiente "
-    "de la medición física del DHT22."
-)
 
 # =========================================================
-# 10. CÁMARA E INFORMACIÓN DEL GESTO
+# INDICADORES DEL CORRAL
 # =========================================================
 
-st.divider()
-st.markdown("### 🎥 Reconocimiento de gestos")
+col1, col2, col3, col4 = st.columns(4)
 
-col_camara, col_informacion = st.columns([1, 1.15])
-
-with col_camara:
-
-    st.markdown("#### Cámara")
-
-    foto = st.camera_input(
-        "Coloca tu mano frente a la cámara",
-        key="camara_corral"
-    )
-
-    st.caption(
-        "Captura tu gesto para que el modelo Keras lo reconozca."
-    )
-
-with col_informacion:
-
-    st.markdown("#### Gesto reconocido")
-
+with col1:
+    valor = "--" if temperatura is None else f"{temperatura} °C"
     st.markdown(
-        f"""
-        <div class="resultado">
-            <h3>{st.session_state.ultimo_gesto}</h3>
-            <p><b>Acción:</b> {st.session_state.ultima_accion}</p>
-            <p><b>Confianza:</b>
-            {st.session_state.ultima_confianza * 100:.1f}%</p>
-            <p><b>Último comando:</b>
-            {st.session_state.ultimo_comando}</p>
-        </div>
-        """,
+        f'<div class="indicador"><div>🌡️</div>'
+        f'<div class="valor">{valor}</div>'
+        f'<div class="nombre-indicador">Temperatura</div></div>',
         unsafe_allow_html=True
     )
 
-    if st.session_state.mensaje_resultado:
-        st.info(st.session_state.mensaje_resultado)
+with col2:
+    valor = "--" if humedad is None else f"{humedad} %"
+    st.markdown(
+        f'<div class="indicador"><div>💧</div>'
+        f'<div class="valor">{valor}</div>'
+        f'<div class="nombre-indicador">Humedad real</div></div>',
+        unsafe_allow_html=True
+    )
+
+with col3:
+    st.markdown(
+        f'<div class="indicador"><div>🌀</div>'
+        f'<div class="valor">{ventilacion:.0f} %</div>'
+        f'<div class="nombre-indicador">Ventilación</div></div>',
+        unsafe_allow_html=True
+    )
+
+with col4:
+    estado_puerta = "Abierta" if puerta_abierta else "Cerrada"
+    st.markdown(
+        f'<div class="indicador"><div>🚪</div>'
+        f'<div class="valor">{estado_puerta}</div>'
+        f'<div class="nombre-indicador">Puerta</div></div>',
+        unsafe_allow_html=True
+    )
+
+
+st.write("")
+
 
 # =========================================================
-# 11. RECONOCER GESTO Y ENVIAR COMANDO
+# ESCENARIO INTERIOR DEL GRANERO
 # =========================================================
 
-if foto is not None:
+# La humedad visual controla la cantidad de niebla.
+niebla = st.session_state.humedad_visual / 100
 
-    if st.button(
-        "🤚 Reconocer gesto y ejecutar acción",
-        type="primary",
-        use_container_width=True
-    ):
+# Temperatura: efectos visuales ilustrativos.
+if temperatura is None:
+    color_ambiente = "#dcebd9"
+elif float(temperatura) < 15:
+    color_ambiente = "#c9e8f4"
+elif float(temperatura) > 30:
+    color_ambiente = "#f7d6a5"
+else:
+    color_ambiente = "#dcebd9"
 
-        try:
-            if not MODEL_PATH.exists():
-                st.error(
-                    "No se encuentra keras_model.h5 en la raíz del proyecto."
-                )
-                st.stop()
+puerta_visual = "translateX(0)" if puerta_abierta else "translateX(0)"
 
-            if not LABELS_PATH.exists():
-                st.error(
-                    "No se encuentra labels.txt en la raíz del proyecto."
-                )
-                st.stop()
+html_granero = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+* {{
+    box-sizing: border-box;
+}}
 
-            etiquetas = cargar_etiquetas()
+body {{
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: transparent;
+}}
 
-            if len(etiquetas) != 6:
-                st.error(
-                    "Se esperaban seis etiquetas en labels.txt. "
-                    f"Se encontraron {len(etiquetas)}."
-                )
-                st.stop()
+.granero {{
+    height: 440px;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+    border-radius: 20px;
+    border: 5px solid #704522;
+    background: {color_ambiente};
+    box-shadow: 0 7px 18px rgba(30,60,30,.2);
+}}
 
-            modelo = cargar_modelo()
+/* Techo interior */
+.techo {{
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 85px;
+    background: repeating-linear-gradient(
+        0deg,
+        #744729,
+        #744729 14px,
+        #8d5a32 15px,
+        #8d5a32 28px
+    );
+    border-bottom: 8px solid #4b301c;
+}}
 
-            imagen = Image.open(
-                BytesIO(foto.getvalue())
-            ).convert("RGB")
+/* Vigas */
+.viga {{
+    position: absolute;
+    top: 70px;
+    left: 8%;
+    width: 10px;
+    height: 270px;
+    background: #754625;
+    box-shadow: 250px 0 #754625, 500px 0 #754625;
+}}
 
-            imagen = imagen.resize((224, 224))
+/* Pared */
+.pared {{
+    position: absolute;
+    top: 85px;
+    left: 0;
+    width: 100%;
+    height: 230px;
+    background: repeating-linear-gradient(
+        90deg,
+        #d6a56e,
+        #d6a56e 45px,
+        #c9915b 46px,
+        #c9915b 51px
+    );
+}}
 
-            imagen_array = np.asarray(
-                imagen,
-                dtype=np.float32
-            )
+/* Piso */
+.piso {{
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 115px;
+    background: repeating-linear-gradient(
+        0deg,
+        #7b512d,
+        #7b512d 18px,
+        #96683c 19px,
+        #96683c 37px
+    );
+    border-top: 9px solid #573a24;
+}}
 
-            # Normalización utilizada en el código
-            # de referencia de tu proyecto anterior.
-            imagen_array = (
-                imagen_array.astype(np.float32) / 127.0
-            ) - 1.0
+/* Ventana */
+.ventana {{
+    position: absolute;
+    top: 125px;
+    right: 10%;
+    width: 85px;
+    height: 85px;
+    background: #a9d9e8;
+    border: 8px solid #704522;
+    box-shadow: inset 0 0 0 3px #d9f2fa;
+}}
 
-            imagen_array = np.expand_dims(
-                imagen_array,
-                axis=0
-            )
+/* Comedero */
+.comedero {{
+    position: absolute;
+    bottom: 72px;
+    left: 7%;
+    font-size: 42px;
+    z-index: 5;
+}}
 
-            prediccion = modelo.predict(
-                imagen_array,
-                verbose=0
-            )[0]
+/* Vaca */
+.vaca {{
+    position: absolute;
+    bottom: 90px;
+    left: 36%;
+    font-size: 115px;
+    z-index: 6;
+    filter: drop-shadow(3px 5px 2px rgba(0,0,0,.15));
+}}
 
-            indice = int(np.argmax(prediccion))
-            confianza = float(prediccion[indice])
+/* Puerta */
+.puerta-marco {{
+    position: absolute;
+    right: 3%;
+    bottom: 68px;
+    width: 115px;
+    height: 190px;
+    background: #472c1b;
+    border: 8px solid #5c3821;
+    z-index: 4;
+}}
 
-            st.session_state.ultimo_gesto = etiquetas[indice]
-            st.session_state.ultima_confianza = confianza
+.puerta {{
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        90deg,
+        #a46b3d,
+        #a46b3d 23px,
+        #744523 24px,
+        #744523 28px
+    );
+    border: 3px solid #4e2f1a;
+    transform-origin: left center;
+    transition: transform 1s ease;
+}}
 
-            if confianza < 0.60:
+.puerta.abierta {{
+    transform: perspective(300px) rotateY(-65deg);
+}}
 
-                st.session_state.ultima_accion = (
-                    "Gesto no reconocido con suficiente confianza"
-                )
+.puerta.cerrada {{
+    transform: perspective(300px) rotateY(0deg);
+}}
 
-                st.session_state.mensaje_resultado = (
-                    "No se envió ningún comando. "
-                    "Intenta tomar otra fotografía."
-                )
+/* Ventilador */
+.ventilador {{
+    position: absolute;
+    top: 105px;
+    left: 44%;
+    font-size: 45px;
+    z-index: 8;
+    animation: girar {max(0.12, 1.2 - ventilacion / 100):.2f}s linear infinite;
+}}
 
-                st.warning(
-                    f"Confianza baja: {confianza * 100:.1f}%"
-                )
+@keyframes girar {{
+    from {{ transform: rotate(0deg); }}
+    to {{ transform: rotate(360deg); }}
+}}
 
-            else:
+/* Niebla visual */
+.niebla {{
+    position: absolute;
+    inset: 85px 0 100px 0;
+    background: rgba(255,255,255,{niebla * 0.48:.2f});
+    pointer-events: none;
+    z-index: 9;
+}}
 
-                gesto = GESTOS[indice]
-                comando = gesto["comando"]
+/* Luz ambiente */
+.lampara {{
+    position: absolute;
+    top: 80px;
+    left: 48%;
+    font-size: 32px;
+    z-index: 10;
+}}
 
-                st.session_state.ultima_accion = gesto["accion"]
-                st.session_state.ultimo_comando = comando
+/* Estado de la puerta */
+.estado {{
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: rgba(20,50,25,.85);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    z-index: 12;
+}}
 
-                # Enviar comando al broker
-                exito, mensaje = enviar_comando(comando)
+/* Indicador de ambiente */
+.ambiente {{
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    color: white;
+    background: rgba(30,45,25,.75);
+    padding: 7px 10px;
+    border-radius: 8px;
+    z-index: 12;
+    font-size: 12px;
+}}
+</style>
+</head>
 
-                if exito:
+<body>
+<div class="granero">
 
-                    st.session_state.mensaje_resultado = mensaje
+    <div class="techo"></div>
+    <div class="pared"></div>
+    <div class="viga"></div>
+    <div class="piso"></div>
 
-                    # Los gestos de humedad cambian
-                    # únicamente la niebla visual.
-                    if indice == 4:
+    <div class="ventana"></div>
+
+    <div class="lampara">💡</div>
+    <div class="ventilador">🌀</div>
+
+    <div class="comedero">🌾</div>
+
+    <div class="vaca">🐄</div>
+
+    <div class="puerta-marco">
+        <div class="puerta {'abierta' if puerta_abierta else 'cerrada'}"></div>
+    </div>
+
+    <div class="niebla"></div>
+
+    <div class="estado">
+        🚪 Puerta: {'ABIERTA' if puerta_abierta else 'CERRADA'}
+    </div>
+
+    <div class="ambiente">
+        🌫️ Humedad visual: {st.session_state.humedad_visual} %
+        &nbsp; | &nbsp;
+        🌀 Ventilación: {ventilacion:.0f} %
+    </div>
+
+</div>
+</body>
+</html>
+"""
+
+
+# =========================================================
+# DISTRIBUCIÓN: GRANERO + CÁMARA
+# =========================================================
+
+st.markdown("### 🏡 Vista interior y reconocimiento de gestos")
+
+col_granero, col_camara = st.columns([1.25, 1], gap="medium")
+
+with col_granero:
+    st.markdown('<div class="tarjeta">', unsafe_allow_html=True)
+    st.markdown("#### 🌾 Interior del granero")
+
+    components.html(
+        html_granero,
+        height=455,
+        scrolling=False
+    )
+
+    st.caption(
+        "La puerta y la ventilación se muestran según los datos "
+        "recibidos del ESP32. La niebla representa humedad visual."
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+with col_camara:
+    st.markdown('<div class="tarjeta">', unsafe_allow_html=True)
+    st.markdown("#### 📷 Cámara de reconocimiento")
+
+    foto = st.camera_input(
+        "Muestra tu mano frente a la cámara",
+        key="camara_corral"
+    )
+
+    if foto is not None and modelo is not None:
+
+        contenido = foto.getvalue()
+        huella = hashlib.md5(contenido).hexdigest()
+
+        # Evita enviar el mismo gesto varias veces al actualizar
+        if huella != st.session_state.ultima_imagen:
+
+            try:
+                indice, confianza = reconocer_gesto(foto)
+
+                st.session_state.ultima_imagen = huella
+                st.session_state.ultima_confianza = confianza
+
+                if confianza >= 0.75 and indice in GESTOS:
+
+                    gesto = GESTOS[indice]
+
+                    st.session_state.ultimo_gesto = gesto
+
+                    if indice in [0, 1, 2, 3]:
+                        enviar_comando(gesto["comando"])
+                        st.session_state.ultimo_comando = gesto["comando"]
+
+                    elif indice == 4:
                         st.session_state.humedad_visual = min(
                             100,
                             st.session_state.humedad_visual + 25
                         )
+                        enviar_comando(gesto["comando"])
+                        st.session_state.ultimo_comando = gesto["comando"]
 
                     elif indice == 5:
                         st.session_state.humedad_visual = max(
                             0,
                             st.session_state.humedad_visual - 25
                         )
-
-                    st.success(
-                        f"Gesto reconocido: {etiquetas[indice]}. "
-                        f"{gesto['accion']}."
-                    )
+                        enviar_comando(gesto["comando"])
+                        st.session_state.ultimo_comando = gesto["comando"]
 
                 else:
-                    st.session_state.mensaje_resultado = mensaje
-                    st.error(mensaje)
+                    st.session_state.ultimo_gesto = None
+                    st.warning(
+                        "No se reconoció un gesto con suficiente confianza."
+                    )
 
-            st.rerun()
+            except Exception as error:
+                st.error(f"Error al reconocer el gesto: {error}")
 
-        except Exception as error:
-            st.error(
-                f"Error al procesar el gesto: {error}"
-            )
+    elif modelo is None:
+        st.error(
+            "No se encontró el modelo. Revisa keras_model.h5 "
+            "y labels.txt en la raíz del repositorio."
+        )
+
+    st.divider()
+
+    st.markdown("#### ✋ Resultado del reconocimiento")
+
+    if st.session_state.ultimo_gesto:
+
+        gesto = st.session_state.ultimo_gesto
+
+        st.markdown(
+            f"""
+            <div style="
+                background:#edf7ed;
+                border:2px solid {gesto['color']};
+                border-radius:15px;
+                padding:16px;
+                text-align:center;
+            ">
+                <div style="font-size:55px;">{gesto['emoji']}</div>
+                <h3 style="margin:5px 0;color:#174b2b;">
+                    {gesto['nombre']}
+                </h3>
+                <p style="margin:5px;color:#355b3d;">
+                    {gesto['accion']}
+                </p>
+                <div style="
+                    font-size:18px;
+                    font-weight:bold;
+                    color:#174b2b;
+                ">
+                    Confianza: {st.session_state.ultima_confianza * 100:.1f} %
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    else:
+        st.info(
+            "Todavía no se ha reconocido ningún gesto. "
+            "Toma una foto de tu mano para comenzar."
+        )
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
 
 # =========================================================
-# 12. PRUEBA VISUAL DE HUMEDAD
+# ESTADO DE HUMEDAD VISUAL
 # =========================================================
 
-with st.expander("🌫️ Prueba manual de la animación de humedad"):
+st.write("")
 
-    st.write(
-        "Estos botones solo prueban el efecto visual. "
-        "No modifican la lectura del sensor."
-    )
+st.markdown("### 💧 Ambiente visual del granero")
 
-    a, b = st.columns(2)
+st.progress(
+    st.session_state.humedad_visual / 100,
+    text=f"Humedad visual: {st.session_state.humedad_visual} %"
+)
 
-    with a:
-        if st.button(
-            "Subir niebla +25 %",
-            use_container_width=True
-        ):
-            st.session_state.humedad_visual = min(
-                100,
-                st.session_state.humedad_visual + 25
-            )
-            st.rerun()
+st.caption(
+    "Este porcentaje es un efecto visual modificado por los gestos. "
+    "No representa la humedad real medida por el DHT22."
+)
 
-    with b:
-        if st.button(
-            "Bajar niebla -25 %",
-            use_container_width=True
-        ):
-            st.session_state.humedad_visual = max(
-                0,
-                st.session_state.humedad_visual - 25
-            )
-            st.rerun()
-
-    st.write(
-        f"Humedad visual actual: "
-        f"{st.session_state.humedad_visual}%"
-    )
 
 # =========================================================
-# 13. ESTADO DE MQTT Y RESPUESTAS DEL ESP32
+# ESTADO DE COMUNICACIÓN
 # =========================================================
 
-st.divider()
+st.write("")
 st.markdown("### 📡 Comunicación con el ESP32")
 
-estado_mqtt = obtener_estado_mqtt()
+col_estado1, col_estado2 = st.columns(2)
 
-if estado_mqtt["conectado"]:
-    st.success("Conectado al broker MQTT")
-else:
-    st.warning(
-        "Sin conexión MQTT. "
-        + str(estado_mqtt["error"])
-    )
+with col_estado1:
+    if estado_mqtt["conectado"]:
+        st.success("Conexión MQTT activa")
+    else:
+        st.warning("Esperando conexión MQTT")
 
-st.caption(
-    f"Broker: {BROKER}:{PORT}"
-)
+with col_estado2:
+    st.info(estado_mqtt["respuesta"])
 
-st.caption(
-    f"Comandos: {TOPICO_COMANDOS}"
-)
-
-st.caption(
-    f"Telemetría: {TOPICO_TELEMETRIA}"
-)
-
-st.caption(
-    f"Respuestas: {TOPICO_RESPUESTAS}"
-)
-
-st.markdown("#### Últimas respuestas del ESP32")
-
-respuestas = estado_mqtt["respuestas"]
-
-if respuestas:
-    for respuesta in reversed(respuestas[-5:]):
-        st.write("•", respuesta)
-else:
-    st.caption(
-        "Todavía no se han recibido respuestas del ESP32."
-    )
-
-if st.button("🔄 Actualizar datos del corral"):
+if st.button("🔄 Actualizar información del corral", use_container_width=True):
     st.rerun()
 
 st.caption(
-    "GranjaConecta · Prototipo académico de simulación."
+    "Si el ESP32 cambia un estado, actualiza esta página para "
+    "ver la información más reciente recibida por MQTT."
 )
