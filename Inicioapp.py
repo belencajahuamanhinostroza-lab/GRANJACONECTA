@@ -5,9 +5,9 @@ from pathlib import Path
 import streamlit as st
 
 
-# --------------------------------------------------
-# CONFIGURACIÓN GENERAL
-# --------------------------------------------------
+# ==================================================
+# CONFIGURACIÓN
+# ==================================================
 
 st.set_page_config(
     page_title="GranjaConecta",
@@ -20,9 +20,9 @@ CARPETA = Path(__file__).resolve().parent
 RUTA_IMAGEN = CARPETA / "fondogranja.jpg"
 
 
-# --------------------------------------------------
-# CARGAR IMAGEN DE PORTADA
-# --------------------------------------------------
+# ==================================================
+# CARGAR IMAGEN
+# ==================================================
 
 def cargar_imagen(ruta):
     if not ruta.exists():
@@ -38,25 +38,25 @@ def cargar_imagen(ruta):
         return None
 
     with open(ruta, "rb") as archivo:
-        imagen_base64 = base64.b64encode(
+        contenido = base64.b64encode(
             archivo.read()
         ).decode("utf-8")
 
-    return f"data:{tipo};base64,{imagen_base64}"
+    return f"data:{tipo};base64,{contenido}"
 
 
 imagen_portada = cargar_imagen(RUTA_IMAGEN)
 
 
-# --------------------------------------------------
-# ESTILOS CSS
-# --------------------------------------------------
+# ==================================================
+# DISEÑO Y ESTILOS
+# ==================================================
 
 st.markdown(
     """
     <style>
 
-    /* Fondo general */
+    /* FONDO GENERAL */
 
     .stApp {
         background-color: #f4faf5;
@@ -67,15 +67,13 @@ st.markdown(
         background-color: transparent;
     }
 
-    /* Espaciado principal */
-
     .block-container {
         padding-top: 2rem;
         padding-bottom: 3rem;
         max-width: 1250px;
     }
 
-    /* Barra lateral */
+    /* BARRA LATERAL */
 
     [data-testid="stSidebar"] {
         background: linear-gradient(
@@ -93,7 +91,7 @@ st.markdown(
         color: white;
     }
 
-    /* Banner principal */
+    /* PORTADA */
 
     .hero {
         width: 100%;
@@ -158,7 +156,7 @@ st.markdown(
         margin-top: 25px;
     }
 
-    /* Títulos de sección */
+    /* TÍTULOS */
 
     .section-title {
         color: #17452e;
@@ -174,7 +172,7 @@ st.markdown(
         margin-bottom: 25px;
     }
 
-    /* Tarjetas */
+    /* TARJETAS */
 
     .card-box {
         background: linear-gradient(
@@ -208,7 +206,7 @@ st.markdown(
         min-height: 65px;
     }
 
-    /* Botones */
+    /* BOTONES */
 
     div.stButton > button {
         background-color: #c6f36a;
@@ -228,7 +226,7 @@ st.markdown(
         transform: translateY(-2px);
     }
 
-    /* Separador */
+    /* PIE DE PÁGINA */
 
     .footer-line {
         height: 1px;
@@ -244,7 +242,7 @@ st.markdown(
         padding-bottom: 10px;
     }
 
-    /* Adaptación a pantallas pequeñas */
+    /* RESPONSIVE */
 
     @media (max-width: 700px) {
         .hero {
@@ -270,9 +268,9 @@ st.markdown(
 )
 
 
-# --------------------------------------------------
+# ==================================================
 # MENÚ LATERAL
-# --------------------------------------------------
+# ==================================================
 
 with st.sidebar:
 
@@ -280,6 +278,7 @@ with st.sidebar:
         """
         <div style="text-align:center; padding:20px 5px 25px 5px;">
             <div style="font-size:42px;">🌱</div>
+
             <div style="
                 font-size:23px;
                 font-weight:800;
@@ -287,6 +286,7 @@ with st.sidebar:
             ">
                 GranjaConecta
             </div>
+
             <div style="
                 font-size:11px;
                 letter-spacing:2px;
@@ -306,20 +306,17 @@ with st.sidebar:
 
     st.page_link(
         "Inicioapp.py",
-        label="🏠 Inicio",
-        icon=None
+        label="🏠 Inicio"
     )
 
     st.page_link(
         "pages/1_Bebedero.py",
-        label="💧 Bebedero",
-        icon=None
+        label="💧 Bebedero"
     )
 
     st.page_link(
         "pages/2_Corral.py",
-        label="🐄 Corral",
-        icon=None
+        label="🐄 Corral"
     )
 
     st.markdown("---")
@@ -327,95 +324,81 @@ with st.sidebar:
     st.caption("Sistema inteligente para el cuidado animal")
 
 
-# --------------------------------------------------
+# ==================================================
 # PORTADA PRINCIPAL
-# --------------------------------------------------
+# ==================================================
 
 if imagen_portada:
 
-    html_portada = f"""
-    <div class="hero"
-         style="background-image: url('{imagen_portada}');">
-
-        <div class="hero-overlay"></div>
-
-        <div class="hero-content">
-
-            <div class="hero-label">
-                TECNOLOGÍA PARA EL CAMPO
-            </div>
-
-            <h1 class="hero-title">
-                GranjaConecta
-            </h1>
-
-            <div class="hero-description">
-                Conectamos la tecnología con el bienestar animal.
-                Una granja inteligente donde el monitoreo y la
-                automatización facilitan el cuidado diario.
-            </div>
-
-            <div class="hero-line"></div>
-
-        </div>
-    </div>
-    """
-
     st.markdown(
-        html_portada,
-        unsafe_allow_html=True
-    )
+        f"""
+        <div class="hero"
+             style="background-image: url('{imagen_portada}');">
 
-else:
+            <div class="hero-overlay"></div>
 
-    st.warning(
-        "No se encontró fondogranja.jpg. "
-        "Verifica que la imagen esté en la carpeta principal "
-        "del proyecto."
-    )
+            <div class="hero-content">
 
-    st.markdown(
-        """
-        <div style="
-            background:linear-gradient(135deg,#174a32,#246642);
-            padding:55px 35px;
-            border-radius:22px;
-            margin-bottom:35px;
-        ">
-            <div style="
-                color:#c6f36a;
-                font-size:13px;
-                font-weight:800;
-                letter-spacing:3px;
-            ">
-                TECNOLOGÍA PARA EL CAMPO
+                <div class="hero-label">
+                    TECNOLOGÍA PARA EL CAMPO
+                </div>
+
+                <h1 class="hero-title">
+                    GranjaConecta
+                </h1>
+
+                <div class="hero-description">
+                    Conectamos la tecnología con el bienestar animal.
+                    Una granja inteligente donde el monitoreo y la
+                    automatización facilitan el cuidado diario.
+                </div>
+
+                <div class="hero-line"></div>
+
             </div>
-
-            <h1 style="
-                color:white;
-                font-size:55px;
-                margin:15px 0;
-            ">
-                GranjaConecta
-            </h1>
-
-            <p style="
-                color:white;
-                font-size:17px;
-            ">
-                Conectamos la tecnología con el bienestar animal.
-                Una granja inteligente donde el monitoreo y la
-                automatización facilitan el cuidado diario.
-            </p>
         </div>
         """,
         unsafe_allow_html=True
     )
 
+else:
 
-# --------------------------------------------------
+    st.markdown(
+        """
+        <div class="hero">
+            <div class="hero-overlay"></div>
+
+            <div class="hero-content">
+                <div class="hero-label">
+                    TECNOLOGÍA PARA EL CAMPO
+                </div>
+
+                <h1 class="hero-title">
+                    GranjaConecta
+                </h1>
+
+                <div class="hero-description">
+                    Conectamos la tecnología con el bienestar animal.
+                    Una granja inteligente donde el monitoreo y la
+                    automatización facilitan el cuidado diario.
+                </div>
+
+                <div class="hero-line"></div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.warning(
+        "No se encontró fondogranja.jpg. "
+        "Verifica que esté junto a Inicioapp.py."
+    )
+
+
+# ==================================================
 # PRESENTACIÓN
-# --------------------------------------------------
+# ==================================================
 
 st.markdown(
     """
@@ -434,12 +417,16 @@ st.markdown(
 )
 
 
-# --------------------------------------------------
+# ==================================================
 # TARJETAS DE NAVEGACIÓN
-# --------------------------------------------------
+# ==================================================
 
 col1, col2 = st.columns(2, gap="large")
 
+
+# --------------------------------------------------
+# TARJETA CORRAL
+# --------------------------------------------------
 
 with col1:
 
@@ -472,6 +459,10 @@ with col1:
         st.switch_page("pages/2_Corral.py")
 
 
+# --------------------------------------------------
+# TARJETA BEBEDERO
+# --------------------------------------------------
+
 with col2:
 
     st.markdown(
@@ -503,9 +494,9 @@ with col2:
         st.switch_page("pages/1_Bebedero.py")
 
 
-# --------------------------------------------------
+# ==================================================
 # PIE DE PÁGINA
-# --------------------------------------------------
+# ==================================================
 
 st.markdown(
     """
