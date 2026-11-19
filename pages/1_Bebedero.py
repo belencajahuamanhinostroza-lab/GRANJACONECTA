@@ -2,10 +2,10 @@
 import streamlit as st
 import paho.mqtt.client as mqtt
 import json
+import io
 import re
 import unicodedata
 import uuid
-import io
 import hashlib
 import speech_recognition as sr
 
@@ -27,8 +27,9 @@ BROKER = "broker.mqttdashboard.com"
 PORT = 1883
 TOPIC = "granjaconecta"
 
-DISTANCIA_VACIO = 30.0
-DISTANCIA_LLENO = 10.0
+# Distancia medida desde el sensor hasta el agua
+DISTANCIA_MINIMA = 10.0
+DISTANCIA_MAXIMA = 30.0
 
 
 # =========================================================
@@ -37,7 +38,6 @@ DISTANCIA_LLENO = 10.0
 
 st.markdown("""
 <style>
-
 .stApp {
     background-color: #EDF5E9;
 }
@@ -92,12 +92,12 @@ div[data-testid="stMetric"] [data-testid="stMetricValue"] {
     color: #17472D !important;
 }
 
-div[data-testid="stAlert"] p {
-    color: #17472D !important;
-}
-
 .stProgress > div > div > div > div {
     background-color: #17472D !important;
+}
+
+div[data-testid="stAlert"] p {
+    color: #17472D !important;
 }
 
 ::-webkit-scrollbar {
@@ -112,7 +112,6 @@ div[data-testid="stAlert"] p {
     background: #17472D;
     border-radius: 10px;
 }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -149,7 +148,7 @@ def crear_conexion_mqtt():
         "datos": {
             "nivelAgua": 0,
             "agua": 0,
-            "distancia": 0,
+            "distancia": 30,
             "distanciaHC": 0,
             "valvula": "cerrada",
             "vaciando": False,
@@ -162,22 +161,38 @@ def crear_conexion_mqtt():
     }
 
     def al_conectar(
-        client, userdata, flags, reason_code, properties
+        client,
+        userdata,
+        flags,
+        reason_code,
+        properties
     ):
 
         if reason_code == 0:
+
             estado["conectado"] = True
+
             client.subscribe(TOPIC)
-            print("Bebedero conectado a MQTT")
+
+            print("GranjaConecta conectado a MQTT")
+
         else:
+
             estado["conectado"] = False
 
+            print("Error al conectar MQTT:", reason_code)
+
     def al_desconectar(
-        client, userdata, disconnect_flags,
-        reason_code, properties
+        client,
+        userdata,
+        disconnect_flags,
+        reason_code,
+        properties
     ):
 
         estado["conectado"] = False
+
+        print("Desconectado de MQTT:", reason_code)
 
     def al_recibir(client, userdata, msg):
 
@@ -195,10 +210,12 @@ def crear_conexion_mqtt():
                 )
 
                 with estado["lock"]:
+
                     estado["datos"].update(nuevos_datos)
 
         except Exception as error:
-            print("Error MQTT:", error)
+
+            print("Error al recibir MQTT:", error)
 
     cliente = mqtt.Client(
         mqtt.CallbackAPIVersion.VERSION2,
@@ -211,10 +228,16 @@ def crear_conexion_mqtt():
 
     try:
 
-        cliente.connect(BROKER, PORT, 60)
+        cliente.connect(
+            BROKER,
+            PORT,
+            60
+        )
+
         cliente.loop_start()
 
     except Exception as error:
+
         print("Error de conexión MQTT:", error)
 
     return cliente, estado
@@ -249,45 +272,74 @@ def enviar_comando(comando):
 
     except Exception as error:
 
-        print("Error MQTT:", error)
+        print("Error al enviar comando:", error)
+
         return False
 
 
 def obtener_datos():
 
     with mqtt_estado["lock"]:
+
         return dict(mqtt_estado["datos"])
 
+
+# =========================================================
+# 6. OBTENER DISTANCIA
+# =========================================================
 
 def obtener_distancia():
 
     datos = obtener_datos()
 
+    valor = datos.get("distancia", 30)
+
     try:
 
-        valor = float(
-            datos.get("distancia", 0)
-        )
-
-        return max(10.0, min(30.0, valor))
+        valor = float(valor)
 
     except (ValueError, TypeError):
-        return 0.0
 
+        valor = 30.0
+
+    # Se permite bajar de 10 cm para detectar
+    # una posible condición de rebosamiento.
+
+    return max(0.0, min(30.0, valor))
+
+
+# =========================================================
+# 7. ESTADOS DE LA VÁLVULA Y LECTURAS
+# =========================================================
 
 def obtener_valvula():
 
+    datos = obtener_datos()
+
     valor = str(
-        obtener_datos().get(
-            "valvula",
-            "cerrada"
-        )
+        datos.get("valvula", "cerrada")
     ).lower()
 
     if "abier" in valor or valor == "open":
+
         return "abierta"
 
     return "cerrada"
+
+
+def convertir_booleano(valor):
+
+    if isinstance(valor, str):
+
+        return valor.lower() in [
+            "true",
+            "1",
+            "si",
+            "sí",
+            "verdadero"
+        ]
+
+    return bool(valor)
 
 
 def esta_vaciando():
@@ -297,12 +349,7 @@ def esta_vaciando():
         False
     )
 
-    if isinstance(valor, str):
-        return valor.lower() in [
-            "true", "1", "si", "sí"
-        ]
-
-    return bool(valor)
+    return convertir_booleano(valor)
 
 
 def lectura_valida():
@@ -312,54 +359,52 @@ def lectura_valida():
         False
     )
 
-    if isinstance(valor, str):
-        return valor.lower() in [
-            "true", "1", "si", "sí"
-        ]
-
-    return bool(valor)
+    return convertir_booleano(valor)
 
 
 # =========================================================
-# 6. ESTADO DEL AGUA
+# 8. CALCULAR ALTURA VISUAL DEL AGUA
+# =========================================================
+
+def obtener_altura_agua(distancia):
+
+    # 30 cm = bebedero visualmente vacío
+    # 10 cm = bebedero visualmente lleno
+
+    altura = (
+        (DISTANCIA_MAXIMA - distancia)
+        /
+        (DISTANCIA_MAXIMA - DISTANCIA_MINIMA)
+    ) * 100
+
+    return max(0.0, min(100.0, altura))
+
+
+# =========================================================
+# 9. ESTADO DEL AGUA
 # =========================================================
 
 def obtener_estado_agua(distancia):
 
-    if distancia <= 0:
-        return "ESPERANDO LECTURA"
-
     if distancia < 10:
+
         return "POSIBLE REBOSAMIENTO"
 
-    if distancia <= 10:
+    elif distancia == 10:
+
         return "LLENO"
 
-    if distancia > 25 and distancia < 30:
+    elif distancia > 25:
+
         return "NIVEL BAJO"
 
-    if distancia >= 30:
-        return "MUY POCA AGUA"
+    else:
 
-    return "NORMAL"
-
-
-def obtener_altura_agua(distancia):
-
-    if distancia <= 0:
-        return 0
-
-    altura = (
-        (DISTANCIA_VACIO - distancia)
-        /
-        (DISTANCIA_VACIO - DISTANCIA_LLENO)
-    ) * 100
-
-    return max(0, min(100, altura))
+        return "NORMAL"
 
 
 # =========================================================
-# 7. NORMALIZAR TEXTO
+# 10. NORMALIZAR TEXTO
 # =========================================================
 
 def normalizar(texto):
@@ -372,7 +417,8 @@ def normalizar(texto):
     )
 
     texto = "".join(
-        caracter for caracter in texto
+        caracter
+        for caracter in texto
         if unicodedata.category(caracter) != "Mn"
     )
 
@@ -390,12 +436,14 @@ def normalizar(texto):
 
 
 # =========================================================
-# 8. INTERPRETAR ÓRDENES
+# 11. INTERPRETAR ÓRDENES
 # =========================================================
 
 def interpretar(texto):
 
     texto = normalizar(texto)
+
+    # CERRAR VÁLVULA
 
     if any(frase in texto for frase in [
         "cierra la valvula",
@@ -404,10 +452,12 @@ def interpretar(texto):
         "cierrala",
         "deten el llenado",
         "detener llenado",
-        "para de llenar"
+        "para el llenado"
     ]):
 
         return "VALVULA_CERRAR"
+
+    # VACIAR BEBEDERO
 
     if any(frase in texto for frase in [
         "vacia la valvula",
@@ -420,23 +470,29 @@ def interpretar(texto):
 
         return "BEBEDERO_VACIAR"
 
+    # LLENAR COMPLETAMENTE
+
     if any(frase in texto for frase in [
         "dejala llena",
         "dejalo lleno",
         "deja el bebedero lleno",
         "llena completamente el bebedero",
-        "llena el bebedero",
-        "llenar el bebedero",
-        "llenalo"
+        "llena el bebedero completamente",
+        "llenalo completamente",
+        "llenala completamente"
     ]):
 
         return "BEBEDERO_LLENO"
+
+    # ABRIR VÁLVULA
 
     if any(frase in texto for frase in [
         "abre la valvula",
         "abrir la valvula",
         "abre valvula",
+        "abrir valvula",
         "comienza a llenar",
+        "comenzar a llenar",
         "empieza a llenar"
     ]):
 
@@ -446,7 +502,7 @@ def interpretar(texto):
 
 
 # =========================================================
-# 9. RESPONDER CONSULTAS
+# 12. RESPONDER CONSULTAS
 # =========================================================
 
 def responder(pregunta):
@@ -455,103 +511,142 @@ def responder(pregunta):
 
     distancia = obtener_distancia()
 
-    if not lectura_valida():
+    valvula = obtener_valvula()
+
+    vaciando = esta_vaciando()
+
+    valida = lectura_valida()
+
+    estado = obtener_estado_agua(distancia)
+
+    if not valida:
 
         return (
             "Todavía estoy esperando los datos del bebedero. "
             "Comprueba la conexión con el ESP32."
         )
 
-    estado = obtener_estado_agua(distancia)
+    # CONSULTAR DISTANCIA
 
     if any(frase in pregunta for frase in [
         "distancia",
-        "centimetros",
         "cuantos centimetros",
-        "cuanto falta"
+        "cuantos cm",
+        "medicion del agua",
+        "medida del agua"
     ]):
 
         return (
-            f"La distancia actual entre el sensor "
-            f"y el agua es de {distancia:.1f} centímetros."
+            f"La distancia entre el sensor y el agua "
+            f"es de {distancia:.1f} centímetros. "
+            f"El estado del bebedero es: {estado}."
         )
+
+    # CONSULTAR NIVEL DE AGUA
 
     if any(frase in pregunta for frase in [
         "nivel de agua",
         "como esta el agua",
         "estado del agua",
-        "cuanta agua hay"
+        "cuanta agua tiene",
+        "cuanta agua hay",
+        "esta lleno",
+        "esta vacio"
     ]):
 
         return (
-            f"El agua se encuentra a {distancia:.1f} centímetros "
-            f"del sensor. El estado actual es: {estado.lower()}."
+            f"El bebedero presenta una distancia de "
+            f"{distancia:.1f} centímetros entre el sensor "
+            f"y la superficie del agua. "
+            f"El nivel se encuentra en estado: {estado}."
         )
+
+    # CONSULTAR VÁLVULA
+
+    if any(frase in pregunta for frase in [
+        "estado de la valvula",
+        "valvula",
+        "esta abierta",
+        "esta cerrada"
+    ]):
+
+        return (
+            f"La válvula está {valvula}."
+        )
+
+    # CONSULTAR LLENADO
+
+    if any(frase in pregunta for frase in [
+        "esta llenando",
+        "esta vaciando",
+        "que esta haciendo",
+        "proceso actual"
+    ]):
+
+        if vaciando:
+
+            return "El bebedero se está vaciando."
+
+        elif valvula == "abierta":
+
+            return "El bebedero se está llenando."
+
+        else:
+
+            return (
+                "El bebedero está en espera. "
+                "La válvula se encuentra cerrada."
+            )
+
+    # CUÁNDO LLENAR
 
     if any(frase in pregunta for frase in [
         "cuando debo llenarlo",
         "cuando debo volver a llenarlo",
         "cuando lo lleno de nuevo",
-        "cuando hay que llenarlo"
+        "cuando hay que llenarlo",
+        "necesita agua",
+        "debo llenarlo"
     ]):
 
         if distancia >= 30:
 
             return (
-                "El bebedero tiene muy poca agua. "
+                "El bebedero está prácticamente vacío. "
                 "Debes llenarlo ahora."
             )
 
-        if distancia > 25:
+        elif distancia > 25:
 
             return (
-                f"La distancia es de {distancia:.1f} cm. "
-                "El nivel está bajo. Es recomendable "
-                "volver a llenar el bebedero."
+                "El nivel de agua está bajo. "
+                "Te recomiendo llenar el bebedero."
             )
 
-        if distancia <= 10:
+        elif distancia <= 10:
 
             return (
                 "El bebedero está lleno. "
-                "No es necesario agregar más agua."
+                "No necesita más agua."
             )
 
-        return (
-            f"El nivel está normal, con una distancia "
-            f"de {distancia:.1f} cm. "
-            "Puedes mantenerlo así por ahora."
-        )
+        else:
 
-    if "valvula" in pregunta:
-
-        return (
-            f"La válvula está actualmente {obtener_valvula()}."
-        )
-
-    if "esta llenando" in pregunta or "llenando" in pregunta:
-
-        if obtener_valvula() == "abierta" and not esta_vaciando():
-            return "Sí. El bebedero se está llenando."
-
-        return "No. Actualmente el bebedero no está llenándose."
-
-    if "esta vaciando" in pregunta or "vaciando" in pregunta:
-
-        if esta_vaciando():
-            return "Sí. El bebedero se está vaciando."
-
-        return "No. Actualmente el bebedero no se está vaciando."
+            return (
+                "El nivel de agua es normal. "
+                "Puedes volver a llenarlo cuando "
+                "la distancia supere los 25 centímetros."
+            )
 
     return (
         "No reconocí esa consulta. Puedes preguntarme "
-        "cuántos centímetros tiene el agua, cuál es su estado, "
-        "cuándo debes llenarlo o cómo está la válvula."
+        "por la distancia del agua, el estado del bebedero, "
+        "la válvula o cuándo debes volver a llenarlo."
     )
 
 
 # =========================================================
-# 10. PROCESAR MENSAJES
+# 13. PROCESAR MENSAJES
 # =========================================================
 
 def procesar_mensaje(texto):
@@ -576,7 +671,7 @@ def procesar_mensaje(texto):
 
             "VALVULA_CERRAR": (
                 "Estoy cerrando la válvula. "
-                "El nivel de agua se conservará."
+                "El llenado se detendrá."
             ),
 
             "BEBEDERO_VACIAR": (
@@ -612,7 +707,7 @@ def procesar_mensaje(texto):
 
 
 # =========================================================
-# 11. ENCABEZADO
+# 14. ENCABEZADO
 # =========================================================
 
 st.title("🐔 GranjaConecta")
@@ -620,18 +715,21 @@ st.title("🐔 GranjaConecta")
 st.subheader("Control inteligente del bebedero")
 
 st.write(
-    "Controla el llenado, vaciado y válvula del bebedero. "
-    "Consulta su distancia en centímetros mediante voz o texto."
+    "Da órdenes por voz o texto y consulta "
+    "el nivel de agua de tus gallinas."
 )
 
 if mqtt_estado["conectado"]:
-    st.success("Conexión MQTT activa con el ESP32.")
+
+    st.success("🟢 Conexión MQTT activa.")
+
 else:
-    st.error("Sin conexión MQTT con el ESP32.")
+
+    st.error("🔴 Sin conexión MQTT con el ESP32.")
 
 
 # =========================================================
-# 12. VISUALIZACIÓN DEL BEBEDERO
+# 15. DIBUJO Y ESTADO DEL BEBEDERO
 # =========================================================
 
 @st.fragment(run_every="1s")
@@ -640,35 +738,40 @@ def mostrar_estado_bebedero():
     datos = obtener_datos()
 
     distancia = obtener_distancia()
+
     valvula = obtener_valvula()
+
     vaciando = esta_vaciando()
+
     valida = lectura_valida()
 
-    estado = obtener_estado_agua(distancia)
     altura = obtener_altura_agua(distancia)
 
-    columna_dibujo, columna_datos = st.columns(
-        [1.1, 1]
-    )
+    estado = obtener_estado_agua(distancia)
+
+    columna_dibujo, columna_datos = st.columns([1.2, 1])
+
+    # -----------------------------------------------------
+    # DIBUJO DEL BEBEDERO
+    # -----------------------------------------------------
 
     with columna_dibujo:
 
         st.markdown(
-            "<h3 style='color:#17472D;'>🐔 Bebedero de las gallinas</h3>",
+            "<h3 style='color:#17472D;'>🐔 Bebedero</h3>",
             unsafe_allow_html=True
         )
 
         dibujo = f"""
         <div style="
-            width:210px;
-            height:270px;
+            width:190px;
+            height:250px;
             margin:20px auto;
-            border:5px solid #17472D;
-            border-radius:18px 18px 35px 35px;
+            border:4px solid #17472D;
+            border-radius:15px 15px 30px 30px;
             position:relative;
             overflow:hidden;
             background:#F8FFF6;
-            box-shadow:0 5px 12px rgba(23,71,45,0.12);
             box-sizing:border-box;
         ">
 
@@ -690,10 +793,11 @@ def mostrar_estado_bebedero():
                 height:{altura:.1f}%;
                 background:linear-gradient(
                     to top,
-                    #168C9B,
-                    #76DCCB
+                    #238A80,
+                    #75D6C0
                 );
-                transition:height 1s ease;
+                transition:height 0.8s ease;
+                z-index:1;
             "></div>
 
             <div style="
@@ -720,7 +824,7 @@ def mostrar_estado_bebedero():
                 font-weight:bold;
                 z-index:3;
             ">
-                {altura:.0f}%
+                {f"{distancia:.1f} cm" if valida else "-- cm"}
             </div>
 
         </div>
@@ -731,14 +835,14 @@ def mostrar_estado_bebedero():
             unsafe_allow_html=True
         )
 
-        st.caption(
-            "Representación visual del nivel de agua simulado."
-        )
+    # -----------------------------------------------------
+    # INFORMACIÓN DEL BEBEDERO
+    # -----------------------------------------------------
 
     with columna_datos:
 
         st.markdown(
-            "<h3 style='color:#17472D;'>📏 Distancia del agua</h3>",
+            "<h3 style='color:#17472D;'>📏 Nivel de agua</h3>",
             unsafe_allow_html=True
         )
 
@@ -770,30 +874,30 @@ def mostrar_estado_bebedero():
         elif distancia < 10:
 
             st.error(
-                "🚨 POSIBLE REBOSAMIENTO. "
-                "Se debe detener el llenado."
+                "🚨 POSIBLE REBOSAMIENTO"
             )
 
-        elif distancia <= 10:
+        elif distancia == 10:
 
             st.success(
-                "🟢 BEBEDERO LLENO. "
-                "La válvula debe permanecer cerrada."
+                "🟢 BEBEDERO LLENO"
             )
 
         elif distancia > 25:
 
             st.warning(
-                "🟠 NIVEL BAJO. "
-                "Es necesario llenar el bebedero."
+                "🟠 NIVEL BAJO. ES NECESARIO LLENAR."
             )
 
         else:
 
             st.success(
-                "🟢 NIVEL NORMAL. "
-                "El agua está dentro del rango adecuado."
+                "🟢 NIVEL NORMAL"
             )
+
+        # -------------------------------------------------
+        # VÁLVULA
+        # -------------------------------------------------
 
         st.markdown(
             "<h3 style='color:#17472D;'>Estado de la válvula</h3>",
@@ -808,35 +912,46 @@ def mostrar_estado_bebedero():
 
             st.error("🔴 VÁLVULA CERRADA")
 
+        # -------------------------------------------------
+        # PROCESO ACTUAL
+        # -------------------------------------------------
+
         if vaciando:
 
             st.warning("💧 VACIANDO EL BEBEDERO")
 
         elif valvula == "abierta":
 
-            st.info("💧 LLENANDO EL BEBEDERO")
+            st.success("💧 LLENANDO EL BEBEDERO")
 
         else:
 
             st.info("Bebedero en espera.")
 
-        st.caption(
-            f"Estado general: {estado}"
+        # -------------------------------------------------
+        # SENSOR FÍSICO HC-SR04
+        # -------------------------------------------------
+
+        hc_valido = convertir_booleano(
+            datos.get("lecturaHCValida", False)
         )
 
-        # La lectura física se muestra por separado
-        # para evitar confundirla con la simulación.
-        lectura_hc = datos.get("distanciaHC", 0)
-        hc_valido = datos.get("lecturaHCValida", False)
+        distancia_hc = datos.get(
+            "distanciaHC",
+            0
+        )
 
         if hc_valido:
 
             try:
+
                 st.caption(
-                    f"Lectura física HC-SR04: "
-                    f"{float(lectura_hc):.1f} cm"
+                    "Lectura física HC-SR04: "
+                    f"{float(distancia_hc):.1f} cm"
                 )
+
             except (ValueError, TypeError):
+
                 pass
 
 
@@ -844,7 +959,7 @@ mostrar_estado_bebedero()
 
 
 # =========================================================
-# 13. CONTROL POR VOZ
+# 16. CONTROL POR VOZ
 # =========================================================
 
 st.divider()
@@ -853,7 +968,7 @@ st.subheader("🎙️ Habla con GranjaConecta")
 
 st.write(
     "Pulsa el micrófono, di tu orden o pregunta "
-    "y después termina la grabación."
+    "y termina la grabación."
 )
 
 audio_voz = mic_recorder(
@@ -885,7 +1000,8 @@ if audio_voz and audio_voz.get("bytes"):
             if not bytes_audio.startswith(b"RIFF"):
 
                 raise ValueError(
-                    "La grabación no tiene un formato WAV válido."
+                    "El micrófono no entregó un WAV válido. "
+                    "Vuelve a grabar."
                 )
 
             reconocedor = sr.Recognizer()
@@ -939,7 +1055,7 @@ if st.session_state.texto_reconocido:
 
 
 # =========================================================
-# 14. CONTROL POR TEXTO
+# 17. CONTROL POR TEXTO
 # =========================================================
 
 st.divider()
@@ -967,7 +1083,7 @@ with st.form(
 
 
 # =========================================================
-# 15. RESPUESTA DE TEXTO
+# 18. RESPUESTA DE GRANJACONECTA
 # =========================================================
 
 st.divider()
@@ -980,7 +1096,7 @@ st.info(
 
 
 # =========================================================
-# 16. HISTORIAL
+# 19. HISTORIAL
 # =========================================================
 
 st.divider()
@@ -1009,7 +1125,7 @@ for remitente, mensaje in st.session_state.historial[-10:]:
 
 
 # =========================================================
-# 17. ÓRDENES Y CONSULTAS
+# 20. COMANDOS DISPONIBLES
 # =========================================================
 
 st.divider()
@@ -1017,20 +1133,18 @@ st.divider()
 with st.expander("📢 Órdenes y preguntas disponibles"):
 
     st.markdown("""
-    **Órdenes por voz o texto**
+    **Órdenes por voz o texto:**
 
     - Abre la válvula.
     - Cierra la válvula.
     - Vacía el bebedero.
-    - Llena el bebedero.
-    - Detén el llenado.
+    - Déjalo lleno.
 
-    **Preguntas**
+    **Preguntas por voz o texto:**
 
-    - ¿Cuántos centímetros tiene el agua?
+    - ¿Cuál es la distancia del agua?
     - ¿Cómo está el nivel de agua?
-    - ¿Cuándo debo llenarlo de nuevo?
-    - ¿La válvula está abierta?
+    - ¿Está abierta la válvula?
     - ¿Está llenando el bebedero?
-    - ¿Está vaciando el bebedero?
+    - ¿Cuándo debo llenarlo de nuevo?
     """)
