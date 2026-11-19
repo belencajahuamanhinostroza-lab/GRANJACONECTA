@@ -650,51 +650,40 @@ def mostrar_estado_bebedero():
     # COLUMNA IZQUIERDA: DIBUJO DEL BEBEDERO
     # ---------------------------------------------
 
-    with columna_dibujo:
+    altura = int(nivel)
 
-        st.markdown(
-            "<h3 style='color:#17472D;'>🐔 Bebedero</h3>",
-            unsafe_allow_html=True
-        )
+dibujo = f"""
+<div style="
+    width:190px;
+    height:250px;
+    margin:20px auto;
+    border:4px solid #17472D;
+    border-radius:15px 15px 30px 30px;
+    position:relative;
+    overflow:hidden;
+    background:#F8FFF6;
+    box-sizing:border-box;
+">
+    <div style="
+        position:absolute;
+        bottom:0;
+        left:0;
+        width:100%;
+        height:{altura}%;
+        background:linear-gradient(
+            to top,
+            #329B91,
+            #75D6C0
+        );
+        transition:height 0.8s ease;
+    "></div>
+</div>
+"""
 
-        altura = int(nivel)
-
-        dibujo = f"""
-        <div style="
-            width:190px;
-            height:250px;
-            margin:20px auto;
-            border:4px solid #17472D;
-            border-radius:15px 15px 30px 30px;
-            position:relative;
-            overflow:hidden;
-            background:#F8FFF6;
-            box-sizing:border-box;
-        ">
-
-            <div style="
-                position:absolute;
-                bottom:0;
-                left:0;
-                width:100%;
-                height:{altura}%;
-                background:linear-gradient(
-                    to top,
-                    #329B91,
-                    #75D6C0
-                );
-                transition:height 0.8s ease;
-            "></div>
-
-        </div>
-        """
-
-        # El HTML se interpreta aquí.
-        # No se utiliza st.write ni st.code.
-        st.markdown(
-            dibujo,
-            unsafe_allow_html=True
-        )
+st.markdown(
+    dibujo,
+    unsafe_allow_html=True
+)
 
     # ---------------------------------------------
     # COLUMNA DERECHA: INFORMACIÓN
