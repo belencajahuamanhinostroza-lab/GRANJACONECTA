@@ -593,7 +593,7 @@ def construir_corral(puerta, ventilacion, temperatura="--", humedad_real="--",
 
 
 # =====================================================
-# 8. PANEL EN VIVO
+# 8. PANEL DEL CORRAL: ALERTAS, GRÁFICO Y TELEMETRÍA
 # =====================================================
 
 @st.fragment(run_every="2s")
@@ -616,7 +616,6 @@ def panel_en_vivo():
     humedad_real = datos.get("humedad", "--")
     ventilacion = numero_porcentaje(datos.get("ventilacion", 0), 0)
 
-    # Admite distintos nombres de campo mientras unificamos firmware.
     ajuste_termico = numero_porcentaje(
         datos.get("ajusteTermico", datos.get("ajuste_termico", 50)), 50
     )
@@ -625,28 +624,97 @@ def panel_en_vivo():
     )
 
     puerta = datos.get("puerta", "sin dato")
+
+    # Calcular alertas ANTES de dibujar el corral para que aparezcan arriba.
+    alertas = []
+
+    try:
+        temp_num = float(temperatura)
+        if temp_num < 17:
+            alertas.append(
+                f"Temperatura baja ({temp_num:.1f} °C). Revisa las condiciones térmicas del corral."
+            )
+        elif temp_num > 25:
+            alertas.append(
+                f"Temperatura alta ({temp_num:.1f} °C). Revisa el ambiente del corral."
+            )
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        hum_num = float(humedad_real)
+        if hum_num < 30:
+            alertas.append(
+                f"Humedad baja ({hum_num:.0f} %). Revisa las condiciones de humedad."
+            )
+        elif hum_num > 60:
+            alertas.append(
+                f"Humedad alta ({hum_num:.0f} %). Revisa las condiciones del corral."
+            )
+    except (TypeError, ValueError):
+        pass
+
+    puerta_txt = str(puerta).strip().lower()
+    puerta_abierta = puerta_txt in ("abierta", "abierto", "open", "1", "true")
+    if puerta_abierta:
+        alertas.append("La puerta del corral está abierta.")
+
+    st.subheader("🚨 Alertas del corral")
+    if alertas:
+        for alerta in alertas:
+            st.markdown(
+                f'<div class="alerta-roja"><strong>⚠️ ATENCIÓN</strong><br>{alerta}</div>',
+                unsafe_allow_html=True,
+            )
+    elif temperatura == "--" and humedad_real == "--":
+        st.markdown(
+            '<div class="alerta-verde"><strong>Esperando datos de los sensores</strong><br>'
+            'Cuando el ESP32 envíe sus mediciones, las alertas aparecerán aquí.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="alerta-verde"><strong>✓ CORRAL ESTABLE</strong><br>'
+            'No se detectan alertas con las lecturas recibidas.</div>',
+            unsafe_allow_html=True,
+        )
+
     st.subheader("🏡 Vista del interior del corral")
     st.caption(
         "El círculo azul representa el alcance visual de la ventilación: "
         "pequeño cuando es baja, mediano cuando es normal y amplio cuando es alta."
     )
-    # Construimos el HTML y devolvemos los estados de puerta.
+
     estado_puerta, puerta_abierta = construir_corral(
-        puerta, ventilacion, temperatura, humedad_real,
-        ajuste_termico, humedad_ajustada
+        puerta,
+        ventilacion,
+        temperatura,
+        humedad_real,
+        ajuste_termico,
+        humedad_ajustada,
     )
 
     st.subheader("📊 Datos recibidos del ESP32")
     a, b, c, d = st.columns(4)
 
+    try:
+        temp_texto = f"{float(temperatura):.1f} °C"
+    except (TypeError, ValueError):
+        temp_texto = "--"
+
+    try:
+        humedad_texto = f"{float(humedad_real):.0f} %"
+    except (TypeError, ValueError):
+        humedad_texto = "--"
+
     a.metric(
         "🌡️ Temperatura real",
-        f"{float(temperatura):.1f} °C" if temperatura != "--" else "--",
+        temp_texto,
         obtener_estado_temperatura(temperatura)[0],
     )
     b.metric(
         "💧 Humedad real",
-        f"{float(humedad_real):.0f} %" if humedad_real != "--" else "--",
+        humedad_texto,
         obtener_estado_humedad(humedad_real)[0],
     )
     c.metric("🌀 Ventilación", f"{ventilacion} %")
@@ -659,88 +727,44 @@ def panel_en_vivo():
     y.progress(humedad_ajustada / 100)
 
     st.caption(
-        "Los ajustes térmico y de humedad son variables simuladas. "
+        "Los ajustes térmico y de humedad son valores simulados. "
         "El DHT22 continúa mostrando las mediciones ambientales reales."
     )
 
-    # Alertas según las lecturas reales.
-    alertas = []
-    try:
-        temp_num = float(temperatura)
-        if temp_num < 17:
-            alertas.append(
-                f"Temperatura baja ({temp_num:.1f} °C). Revisa las condiciones térmicas del corral."
-            )
-        elif temp_num > 25:
-            alertas.append(
-                f"Temperatura alta ({temp_num:.1f} °C). Se requiere revisar el ambiente."
-            )
-    except (TypeError, ValueError):
-        pass
-
-    try:
-        hum_num = float(humedad_real)
-        if hum_num < 30:
-            alertas.append(
-                f"Humedad baja ({hum_num:.0f} %). El indicador requiere atención."
-            )
-        elif hum_num > 60:
-            alertas.append(
-                f"Humedad alta ({hum_num:.0f} %). El indicador requiere atención."
-            )
-    except (TypeError, ValueError):
-        pass
-
-    if puerta_abierta:
-        alertas.append("La puerta del corral está abierta.")
-
-    if alertas:
-        st.markdown("### 🚨 Alertas del corral")
-        for alerta in alertas:
-            st.markdown(
-                f'<div class="alerta-roja"><strong>⚠️ ATENCIÓN</strong><br>{alerta}</div>',
-                unsafe_allow_html=True,
-            )
-    else:
-        st.markdown(
-            '<div class="alerta-verde"><strong>✓ CORRAL ESTABLE</strong><br>'
-            'No se detectan alertas con las lecturas recibidas.</div>',
-            unsafe_allow_html=True,
-        )
-
     if st.session_state.respuestas_esp32:
-        with st.expander("Respuestas recibidas del ESP32"):
+        with st.expander("Mensajes de respuesta del ESP32"):
             for respuesta in reversed(st.session_state.respuestas_esp32):
                 st.write("• " + respuesta)
 
 
-panel_en_vivo()
-
 # =====================================================
-# 9. CÁMARA Y RECONOCIMIENTO DE GESTOS
+# 9. CÁMARA AL COSTADO DEL CORRAL E INSTRUCCIONES
 # =====================================================
 
-st.divider()
-st.subheader("📷 Reconocimiento de gestos")
-st.write(
-    "Toma una fotografía con la mano visible. La aplicación identificará "
-    "el gesto, mostrará la acción y enviará la orden a Wokwi."
-)
+col_corral, col_control = st.columns([1.45, 1], gap="large")
 
-col_camara, col_resultado = st.columns([0.9, 1.25], gap="large")
+with col_corral:
+    panel_en_vivo()
 
-with col_camara:
-    st.markdown("#### Cámara")
-    foto = st.camera_input("Toma una foto del gesto", key="camara_corral")
+with col_control:
+    st.subheader("📷 Control por gestos")
+    st.write(
+        "Usa la cámara para enviar órdenes al corral. "
+        "Procura que tu mano aparezca completa y bien iluminada."
+    )
 
-with col_resultado:
-    st.markdown("#### Gesto y acción detectados")
-    st.markdown(f"**Último gesto:** {st.session_state.ultimo_gesto}")
+    foto = st.camera_input(
+        "Coloca tu mano frente a la cámara y toma una foto",
+        key="camara_corral",
+    )
+
+    st.markdown("#### Resultado del reconocimiento")
+    st.markdown(f"**Último gesto reconocido:** {st.session_state.ultimo_gesto}")
     st.markdown(f"**Última acción:** {st.session_state.ultima_accion}")
 
     if st.session_state.ultima_confianza is not None:
         st.markdown(
-            f"**Confianza:** {st.session_state.ultima_confianza:.1f}%"
+            f"**Nivel de confianza:** {st.session_state.ultima_confianza:.1f}%"
         )
 
     if foto is not None:
@@ -760,12 +784,12 @@ with col_resultado:
                     else f"Clase {indice}"
                 )
 
-                st.write(f"**Etiqueta reconocida:** {etiqueta}")
+                st.write(f"**Clase identificada por el modelo:** {etiqueta}")
 
                 if len(etiquetas) != 8:
                     st.error(
                         f"Se esperaban 8 etiquetas y se encontraron {len(etiquetas)}. "
-                        "Verifica labels.txt."
+                        "Verifica el archivo labels.txt."
                     )
                 elif indice not in ACCIONES:
                     st.warning("La clase reconocida no tiene una acción asignada.")
@@ -774,8 +798,8 @@ with col_resultado:
                     st.markdown(
                         f"""
                         <div class="accion-detectada">
-                          <div style="font-size:28px">{accion["emoji"]}</div>
-                          <strong>ACCIÓN RECONOCIDA</strong><br>
+                          <div style="font-size:25px;">{accion["emoji"]}</div>
+                          <strong>ACCIÓN IDENTIFICADA</strong><br>
                           {accion["nombre"]}<br>
                           <small>{accion["detalle"]}</small>
                         </div>
@@ -786,15 +810,62 @@ with col_resultado:
                 else:
                     st.warning(
                         f"Confianza baja ({confianza:.1f}%). "
-                        "No se envió ninguna orden. Centra la mano, mejora la luz e inténtalo de nuevo."
+                        "No se envió ninguna orden. Vuelve a colocar la mano "
+                        "frente a la cámara, mejora la iluminación y toma otra foto."
                     )
 
             except Exception as exc:
                 st.error(f"No se pudo ejecutar el reconocimiento: {exc}")
         else:
             st.caption(
-                "Esta foto ya fue procesada. Toma otra fotografía para enviar una nueva orden."
+                "Esta fotografía ya fue procesada. Toma una nueva foto "
+                "para reconocer y enviar otra orden."
             )
+
+    st.markdown("---")
+    st.markdown("#### ✋ Instrucciones para utilizar los gestos")
+    st.markdown(
+        """
+        **1.** Permite el acceso a la cámara.
+
+        **2.** Coloca la mano frente a la cámara, dentro del encuadre y con buena iluminación.
+
+        **3.** Realiza la seña que corresponde a la acción que deseas ejecutar.
+
+        **4.** Mantén la mano quieta y toma la fotografía.
+
+        **5.** Revisa el nombre de la acción reconocida. Si la confianza es inferior al 80 %, la aplicación no enviará la orden.
+
+        **6.** Cuando la orden sea aceptada, espera la actualización del corral y los datos del ESP32.
+        """
+    )
+
+    st.markdown("**Acciones disponibles en el modelo:**")
+    instrucciones_gestos = [
+        ("Abrir puerta", "Abre la puerta del corral."),
+        ("Cerrar puerta", "Cierra la puerta del corral."),
+        ("Aumentar ventilación", "Aumenta la ventilación en 25 puntos."),
+        ("Disminuir ventilación", "Disminuye la ventilación en 25 puntos."),
+        ("Subir ajuste térmico", "Aumenta el ajuste térmico simulado en 25 puntos."),
+        ("Bajar ajuste térmico", "Disminuye el ajuste térmico simulado en 25 puntos."),
+        ("Subir ajuste de humedad", "Aumenta el ajuste de humedad simulado en 25 puntos."),
+        ("Bajar ajuste de humedad", "Disminuye el ajuste de humedad simulado en 25 puntos."),
+    ]
+
+    for nombre, descripcion in instrucciones_gestos:
+        st.markdown(
+            f'<div style="background:#ffffff;border:1px solid #d5e5d2;'
+            f'border-radius:9px;padding:8px 10px;margin:5px 0;color:#245c36;">'
+            f'<strong>{nombre}</strong><br><small>{descripcion}</small></div>',
+            unsafe_allow_html=True,
+        )
+
+    st.caption(
+        "Importante: realiza la misma postura de mano con la que se entrenó "
+        "esa clase en Teachable Machine. Los nombres indican la acción, "
+        "no una postura nueva."
+    )
+
 
 # =====================================================
 # 10. CONTROLES MANUALES PARA PRUEBAS
@@ -803,7 +874,7 @@ with col_resultado:
 st.divider()
 st.subheader("🎮 Controles manuales del corral")
 st.caption(
-    "Estos botones sirven para probar Wokwi sin utilizar la cámara. "
+    "Estos botones permiten probar Wokwi sin utilizar la cámara. "
     "Las mismas órdenes se envían por MQTT."
 )
 
@@ -837,6 +908,7 @@ with c3:
             st.success("Orden de disminución enviada.")
 
 c4, c5 = st.columns(2)
+
 with c4:
     st.markdown("#### 💧 Ajuste de humedad")
     if st.button("Subir ajuste de humedad", use_container_width=True, key="corral_hum_mas"):
