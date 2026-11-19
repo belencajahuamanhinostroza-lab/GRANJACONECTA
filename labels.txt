@@ -1,0 +1,8 @@
+0 Abrir puerta
+1 Cerrar Puerta
+2 Aumentar Ventilación
+3 Disminuir Ventilación
+4 Subir Ajuste Térmico
+5 Bajar Ajuste Térmico
+6 Subir Humedad
+7 Bajar Humedad
