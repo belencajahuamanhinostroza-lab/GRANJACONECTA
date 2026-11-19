@@ -568,76 +568,98 @@ def mostrar_estado_bebedero():
     # DIBUJO DEL BEBEDERO
     # -----------------------------------------------------
 
-    with columna_dibujo:
 
-        altura = max(0, min(100, nivel))
+import streamlit as st
 
-        estado_valvula = valvula.upper()
+st.set_page_config(
+    page_title="Bebedero",
+    page_icon="🐔",
+    layout="wide"
+)
 
-        color_valvula = (
-            "#238A4B" if valvula == "abierta" else "#17472D"
-        )
+# ESTILOS GENERALES
+st.markdown("""
+<style>
+.stApp {
+    background-color: #EDF5E9;
+}
+h1, h2, h3, p, label {
+    color: #17472D !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
-        dibujo = f"""
+# DATOS DE PRUEBA
+# Después se conectarán a los datos reales de MQTT.
+nivel_agua = 50
+valvula = "CERRADA"
+
+# LIMITAR NIVEL ENTRE 0 Y 100
+nivel_agua = max(0, min(100, int(nivel_agua)))
+
+# ENCABEZADO
+st.title("🐔 Bebedero")
+
+# DISTRIBUCIÓN
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    # DIBUJO DEL BEBEDERO
+    dibujo = f"""
+    <div style="
+        width:190px;
+        height:250px;
+        margin:20px auto;
+        border:4px solid #17472D;
+        border-radius:15px 15px 30px 30px;
+        position:relative;
+        overflow:hidden;
+        background:#F8FFF6;
+        box-sizing:border-box;
+    ">
         <div style="
-            background:#DCEBD8;
-            border:3px solid #17472D;
-            border-radius:22px;
-            padding:22px;
-            text-align:center;
+            position:absolute;
+            bottom:0;
+            left:0;
             width:100%;
-            box-sizing:border-box;
+            height:{nivel_agua}%;
+            background:linear-gradient(
+                to top,
+                #329B91,
+                #75D6C0
+            );
+            transition:height 0.8s ease;
+        "></div>
+    </div>
+    """
+    st.markdown(dibujo, unsafe_allow_html=True)
+
+with col2:
+    st.markdown(
+        "<h3 style='color:#17472D;'>Nivel de agua</h3>",
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        f"<h2 style='color:#17472D;'>{nivel_agua}%</h2>",
+        unsafe_allow_html=True
+    )
+
+    st.progress(nivel_agua / 100)
+
+    st.markdown(
+        f"""
+        <p style="
+            color:#17472D;
+            font-size:19px;
+            font-weight:bold;
         ">
+            Válvula: {valvula}
+        </p>
+        """,
+        unsafe_allow_html=True
+    )
 
-            <h3 style="
-                color:#17472D;
-                margin:0 0 20px 0;
-            ">🐔 Bebedero</h3>
-
-            <div style="
-                width:190px;
-                height:250px;
-                margin:10px auto;
-                border:4px solid #17472D;
-                border-radius:15px 15px 30px 30px;
-                position:relative;
-                overflow:hidden;
-                background:#F8FFF6;
-                box-sizing:border-box;
-            ">
-
-                <div style="
-                    position:absolute;
-                    bottom:0;
-                    left:0;
-                    width:100%;
-                    height:{altura}%;
-                    background:linear-gradient(
-                        to top,
-                        #329B91,
-                        #75D6C0
-                    );
-                    transition:height 0.8s ease;
-                "></div>
-
-            </div>
-
-            <p style="
-                color:{color_valvula};
-                font-size:19px;
-                font-weight:bold;
-                margin:12px 0 0 0;
-            ">
-                Válvula: {estado_valvula}
-            </p>
-
-        </div>
-        """
-
-        st.markdown(
-            dibujo,
-            unsafe_allow_html=True
-        )
 
     # -----------------------------------------------------
     # DATOS AL COSTADO
