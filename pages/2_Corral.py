@@ -2,7 +2,6 @@
 import hashlib
 import json
 import queue
-import re
 import uuid
 from pathlib import Path
 
@@ -690,65 +689,8 @@ def convertir_lectura(valor):
         return None
 
 
-def obtener_estado_temperatura(valor):
-    v = convertir_lectura(valor)
-
-    if v is None:
-        return "SIN DATO", "#64748b"
-
-    if v < 17:
-        return "BAJA", "#1688d4"
-
-    if v > 25:
-        return "ALTA", "#d92d20"
-
-    return "NORMAL", "#218739"
-
-
-def obtener_estado_humedad(valor):
-    v = convertir_lectura(valor)
-
-    if v is None:
-        return "SIN DATO", "#64748b"
-
-    if v < 30:
-        return "BAJA", "#1688d4"
-
-    if v > 60:
-        return "ALTA", "#d92d20"
-
-    return "NORMAL", "#218739"
-
-
-def construir_corral(
-    puerta,
-    ventilacion,
-    temperatura="--",
-    humedad_real="--",
-    ajuste_termico=50,
-    ajuste_humedad=50,
-):
+def construir_corral(puerta, ventilacion):
     ventilacion = numero_porcentaje(ventilacion, 0)
-
-    # Temperatura y humedad son exclusivamente las lecturas reales
-    # recibidas del sensor DHT22.
-    estado_temp, color_temp = obtener_estado_temperatura(
-        temperatura
-    )
-
-    estado_hum, color_hum = obtener_estado_humedad(
-        humedad_real
-    )
-
-    # Estos ajustes se utilizan únicamente en los porcentajes
-    # inferiores del panel. No modifican el dibujo.
-    ajuste_termico = numero_porcentaje(
-        ajuste_termico, 50
-    )
-
-    ajuste_humedad = numero_porcentaje(
-        ajuste_humedad, 50
-    )
 
     puerta_txt = str(puerta).strip().lower()
 
@@ -774,7 +716,7 @@ def construir_corral(
         color_puerta = "#a66a35"
         movimiento_puerta = "translateX(0) rotateY(0)"
 
-    # La ventilación sigue modificando el círculo azul.
+    # La ventilación modifica el círculo azul.
     diametro = 18 + (ventilacion * 0.82)
     opacidad_aire = 0.12 + (ventilacion / 100) * 0.22
     intensidad_ventilador = (
@@ -847,7 +789,7 @@ def construir_corral(
         box-sizing:border-box;
       "></div>
 
-      <!-- Círculo de ventilación: se conserva su funcionamiento -->
+      <!-- Círculo azul de ventilación -->
       <div style="
         position:absolute;
         left:50%;
@@ -868,6 +810,7 @@ def construir_corral(
         pointer-events:none;
       "></div>
 
+      <!-- Ventilador -->
       <div style="
         position:absolute;
         top:70px;
@@ -877,6 +820,7 @@ def construir_corral(
         z-index:2;
       ">🌀</div>
 
+      <!-- Suelo del corral -->
       <div style="
         position:absolute;
         bottom:0;left:0;
@@ -887,6 +831,7 @@ def construir_corral(
         z-index:2;
       "></div>
 
+      <!-- Gallinas -->
       <div style="
         position:absolute;
         bottom:73px;left:18%;
@@ -915,7 +860,7 @@ def construir_corral(
         z-index:3;
       ">🐔</div>
 
-      <!-- Puerta: se conserva su funcionamiento -->
+      <!-- Puerta automática -->
       <div style="
         position:absolute;
         bottom:73px;
@@ -937,6 +882,7 @@ def construir_corral(
         z-index:4;
       ">🚪</div>
 
+      <!-- Título -->
       <div style="
         position:absolute;
         top:12px;
@@ -948,44 +894,7 @@ def construir_corral(
         z-index:5;
       ">🐔 CORRAL DE GALLINAS</div>
 
-      <!-- Temperatura real del sensor -->
-      <div style="
-        position:absolute;
-        top:60px;
-        left:12px;
-        background:{color_temp};
-        color:#ffffff;
-        padding:7px 10px;
-        border:2px solid rgba(255,255,255,.95);
-        box-shadow:0 2px 7px rgba(0,0,0,.25);
-        border-radius:9px;
-        font-size:11px;
-        font-weight:800;
-        z-index:6;
-      ">
-        🌡️ TEMPERATURA: {estado_temp} ·
-        {convertir_lectura(temperatura) if convertir_lectura(temperatura) is not None else '--'} °C
-      </div>
-
-      <!-- Humedad real del sensor -->
-      <div style="
-        position:absolute;
-        top:60px;
-        right:12px;
-        background:{color_hum};
-        color:#ffffff;
-        padding:7px 10px;
-        border:2px solid rgba(255,255,255,.95);
-        box-shadow:0 2px 7px rgba(0,0,0,.25);
-        border-radius:9px;
-        font-size:11px;
-        font-weight:800;
-        z-index:6;
-      ">
-        💧 HUMEDAD: {estado_hum} ·
-        {convertir_lectura(humedad_real) if convertir_lectura(humedad_real) is not None else '--'} %
-      </div>
-
+      <!-- Información inferior -->
       <div style="
         position:absolute;
         bottom:9px;
@@ -1068,7 +977,7 @@ def panel_en_vivo():
 
     puerta = datos.get("puerta", "sin dato")
 
-    # Alertas basadas únicamente en las lecturas reales.
+    # Alertas basadas en las lecturas reales.
     alertas = []
 
     try:
@@ -1162,13 +1071,11 @@ def panel_en_vivo():
         "pequeño cuando es baja, mediano cuando es normal y amplio cuando es alta."
     )
 
+    # El dibujo solo recibe la puerta y la ventilación.
+    # Ya no muestra temperatura ni humedad.
     estado_puerta, puerta_abierta = construir_corral(
         puerta,
         ventilacion,
-        temperatura,
-        humedad_real,
-        ajuste_termico,
-        humedad_ajustada,
     )
 
     st.subheader("📊 Parámetros controlados por gestos")
