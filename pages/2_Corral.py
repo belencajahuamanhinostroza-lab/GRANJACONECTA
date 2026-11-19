@@ -55,7 +55,23 @@ CONFIANZA_MINIMA = 80.0
 st.markdown(
     """
     <style>
-    .stApp { background: #f4faf5; }
+    
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+        background: #edf5e9 !important;
+    }
+    [data-testid="stHeader"] { background: #edf5e9 !important; }
+    [data-testid="stMainBlockContainer"] {
+        background: transparent !important;
+        padding-top: 1.4rem;
+    }
+    h1, h2, h3, h4, h5, h6,
+    [data-testid="stMarkdownContainer"] h1,
+    [data-testid="stMarkdownContainer"] h2,
+    [data-testid="stMarkdownContainer"] h3,
+    [data-testid="stMarkdownContainer"] h4 {
+        color: #17472d !important;
+    }
+    
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg,#123d2b,#245c36);
     }
@@ -89,20 +105,47 @@ st.markdown(
     .alerta-roja {
         background:#fff0ed;
         border:1px solid #e99a8d;
-        border-left:6px solid #d93636;
-        border-radius:10px;
-        padding:12px 15px;
-        margin:8px 0;
+        border-left:4px solid #d93636;
+        border-radius:8px;
+        padding:6px 10px;
+        margin:4px 0;
         color:#7a211b;
+        font-size:0.82rem;
+        line-height:1.25;
     }
     .alerta-verde {
         background:#eaf7eb;
         border:1px solid #a9d7ac;
-        border-left:6px solid #29965a;
-        border-radius:10px;
-        padding:12px 15px;
-        margin:8px 0;
+        border-left:4px solid #29965a;
+        border-radius:8px;
+        padding:6px 10px;
+        margin:4px 0;
         color:#245c36;
+        font-size:0.82rem;
+        line-height:1.25;
+    }
+    .gesto-card {
+        background:#ffffff;
+        border:1px solid #c9dfc4;
+        border-radius:10px;
+        padding:8px 10px;
+        margin:5px 0;
+        color:#17472d;
+        min-height:66px;
+    }
+    .gesto-emoji {
+        font-size:1.65rem;
+        line-height:1.1;
+        margin-bottom:4px;
+    }
+    .cambio-confirmado {
+        background:#e7f5e8;
+        border:1px solid #9bcda2;
+        border-left:5px solid #29965a;
+        border-radius:10px;
+        padding:10px 12px;
+        margin:8px 0;
+        color:#17472d;
     }
     .accion-detectada {
         background:#eaf7eb;
@@ -132,6 +175,7 @@ INICIALES = {
     "comando_pendiente": "",
     "ultimo_error_mqtt": None,
     "ultimo_paquete": None,
+    "ultimo_cambio_confirmado": "Todavía no se ha realizado ningún cambio.",
 }
 
 for k, v in INICIALES.items():
@@ -269,6 +313,41 @@ def procesar_mensajes_mqtt():
             datos = paquete.get("datos", paquete)
             if isinstance(datos, dict):
                 st.session_state.telemetria_corral.update(datos)
+
+                comando_confirmado = st.session_state.comando_pendiente
+                if comando_confirmado:
+                    if comando_confirmado == "PUERTA_ABRIR":
+                        st.session_state.ultimo_cambio_confirmado = (
+                            "La puerta del corral quedó ABIERTA."
+                        )
+                    elif comando_confirmado == "PUERTA_CERRAR":
+                        st.session_state.ultimo_cambio_confirmado = (
+                            "La puerta del corral quedó CERRADA."
+                        )
+                    elif comando_confirmado in ("VENTILACION_SUBIR", "VENTILACION_BAJAR"):
+                        valor = datos.get("ventilacion", "sin dato")
+                        st.session_state.ultimo_cambio_confirmado = (
+                            f"La ventilación se actualizó a {valor}%."
+                        )
+                    elif comando_confirmado in ("AJUSTE_TERMICO_SUBIR", "AJUSTE_TERMICO_BAJAR"):
+                        valor = datos.get("ajusteTermico", datos.get("ajuste_termico", "sin dato"))
+                        st.session_state.ultimo_cambio_confirmado = (
+                            f"El ajuste térmico simulado quedó en {valor}%."
+                        )
+                    elif comando_confirmado in ("HUMEDAD_SUBIR", "HUMEDAD_BAJAR"):
+                        valor = datos.get("humedadVisual", datos.get("ajusteHumedad", "sin dato"))
+                        st.session_state.ultimo_cambio_confirmado = (
+                            f"El ajuste de humedad simulado quedó en {valor}%."
+                        )
+                    elif comando_confirmado == "VALVULA_ABRIR":
+                        st.session_state.ultimo_cambio_confirmado = (
+                            "La válvula del bebedero quedó ABIERTA."
+                        )
+                    elif comando_confirmado == "VALVULA_CERRAR":
+                        st.session_state.ultimo_cambio_confirmado = (
+                            "La válvula del bebedero quedó CERRADA."
+                        )
+
                 st.session_state.comando_pendiente = ""
 
         elif tipo == "respuesta":
@@ -424,6 +503,22 @@ with st.sidebar:
     st.write("🌡️ Ajuste térmico")
     st.write("💧 Ajuste de humedad")
     st.write("📊 Monitoreo ambiental")
+    with st.expander("📖 ¿Cómo utilizar la cámara?"):
+        st.markdown(
+            """
+            1. Permite el acceso a la cámara.
+            2. Coloca la mano completa dentro del encuadre.
+            3. Busca buena iluminación y evita fondos muy cargados.
+            4. Realiza uno de los gestos mostrados debajo de la cámara.
+            5. Mantén la postura y toma la fotografía.
+            6. Revisa el gesto reconocido y el mensaje del último cambio.
+            7. Si la confianza es menor al 80 %, no se envía la orden:
+               vuelve a intentarlo.
+
+            **Importante:** realiza las mismas posturas utilizadas para
+            entrenar las ocho clases en Teachable Machine.
+            """
+        )
     st.markdown("---")
     st.caption("Prototipo académico ESP32 + Wokwi + MQTT")
 
@@ -659,7 +754,7 @@ def panel_en_vivo():
     if puerta_abierta:
         alertas.append("La puerta del corral está abierta.")
 
-    st.subheader("🚨 Alertas del corral")
+    st.markdown("<h4 style='color:#17472d;margin:2px 0 5px 0;font-size:1rem;'>🚨 Alertas del corral</h4>", unsafe_allow_html=True)
     if alertas:
         for alerta in alertas:
             st.markdown(
@@ -767,6 +862,13 @@ with col_control:
             f"**Nivel de confianza:** {st.session_state.ultima_confianza:.1f}%"
         )
 
+    st.markdown(
+        '<div class="cambio-confirmado"><strong>✓ Último cambio realizado</strong><br>'
+        + str(st.session_state.ultimo_cambio_confirmado)
+        + '</div>',
+        unsafe_allow_html=True,
+    )
+
     if foto is not None:
         hash_foto = hashlib.sha256(foto.getvalue()).hexdigest()
 
@@ -823,103 +925,50 @@ with col_control:
             )
 
     st.markdown("---")
-    st.markdown("#### ✋ Instrucciones para utilizar los gestos")
-    st.markdown(
-        """
-        **1.** Permite el acceso a la cámara.
-
-        **2.** Coloca la mano frente a la cámara, dentro del encuadre y con buena iluminación.
-
-        **3.** Realiza la seña que corresponde a la acción que deseas ejecutar.
-
-        **4.** Mantén la mano quieta y toma la fotografía.
-
-        **5.** Revisa el nombre de la acción reconocida. Si la confianza es inferior al 80 %, la aplicación no enviará la orden.
-
-        **6.** Cuando la orden sea aceptada, espera la actualización del corral y los datos del ESP32.
-        """
+    st.markdown("#### ✋ Gestos disponibles")
+    st.caption(
+        "Mira el emoji y realiza la misma seña que utilizaste para entrenar "
+        "esa clase en Teachable Machine."
     )
 
-    st.markdown("**Acciones disponibles en el modelo:**")
-    instrucciones_gestos = [
-        ("Abrir puerta", "Abre la puerta del corral."),
-        ("Cerrar puerta", "Cierra la puerta del corral."),
-        ("Aumentar ventilación", "Aumenta la ventilación en 25 puntos."),
-        ("Disminuir ventilación", "Disminuye la ventilación en 25 puntos."),
-        ("Subir ajuste térmico", "Aumenta el ajuste térmico simulado en 25 puntos."),
-        ("Bajar ajuste térmico", "Disminuye el ajuste térmico simulado en 25 puntos."),
-        ("Subir ajuste de humedad", "Aumenta el ajuste de humedad simulado en 25 puntos."),
-        ("Bajar ajuste de humedad", "Disminuye el ajuste de humedad simulado en 25 puntos."),
+    tarjetas_gestos = [
+        (0, "Abrir puerta", "Abre la puerta del corral."),
+        (1, "Cerrar puerta", "Cierra la puerta del corral."),
+        (2, "Aumentar ventilación", "Aumenta 25 puntos la ventilación."),
+        (3, "Disminuir ventilación", "Disminuye 25 puntos la ventilación."),
+        (4, "Subir ajuste térmico", "Aumenta 25 puntos el ajuste térmico."),
+        (5, "Bajar ajuste térmico", "Disminuye 25 puntos el ajuste térmico."),
+        (6, "Subir ajuste de humedad", "Aumenta 25 puntos el ajuste de humedad."),
+        (7, "Bajar ajuste de humedad", "Disminuye 25 puntos el ajuste de humedad."),
     ]
 
-    for nombre, descripcion in instrucciones_gestos:
-        st.markdown(
-            f'<div style="background:#ffffff;border:1px solid #d5e5d2;'
-            f'border-radius:9px;padding:8px 10px;margin:5px 0;color:#245c36;">'
-            f'<strong>{nombre}</strong><br><small>{descripcion}</small></div>',
-            unsafe_allow_html=True,
-        )
+    for fila_inicio in range(0, len(tarjetas_gestos), 2):
+        gcols = st.columns(2)
+        for columna, item in zip(gcols, tarjetas_gestos[fila_inicio:fila_inicio + 2]):
+            indice, nombre, descripcion = item
+            emoji = ACCIONES[indice]["emoji"]
+            columna.markdown(
+                f'<div class="gesto-card">'
+                f'<div class="gesto-emoji">{emoji}</div>'
+                f'<strong>{nombre}</strong><br>'
+                f'<small>{descripcion}</small>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
     st.caption(
-        "Importante: realiza la misma postura de mano con la que se entrenó "
-        "esa clase en Teachable Machine. Los nombres indican la acción, "
-        "no una postura nueva."
+        "El emoji es una guía visual. La postura exacta debe coincidir con "
+        "la seña con la que se entrenó la clase correspondiente."
     )
 
 
 # =====================================================
-# 10. CONTROLES MANUALES PARA PRUEBAS
+# 10. FIN DE LA PÁGINA
 # =====================================================
-
-st.divider()
-st.subheader("🎮 Controles manuales del corral")
-st.caption(
-    "Estos botones permiten probar Wokwi sin utilizar la cámara. "
-    "Las mismas órdenes se envían por MQTT."
-)
-
-c1, c2, c3 = st.columns(3)
-
-with c1:
-    st.markdown("#### 🚪 Puerta")
-    if st.button("Abrir puerta", use_container_width=True, key="corral_abrir"):
-        if enviar_comando("PUERTA_ABRIR"):
-            st.success("Orden de apertura enviada.")
-    if st.button("Cerrar puerta", use_container_width=True, key="corral_cerrar"):
-        if enviar_comando("PUERTA_CERRAR"):
-            st.success("Orden de cierre enviada.")
-
-with c2:
-    st.markdown("#### 🌀 Ventilación")
-    if st.button("Subir ventilación", use_container_width=True, key="corral_vent_mas"):
-        if enviar_comando("VENTILACION_SUBIR"):
-            st.success("Orden de aumento enviada.")
-    if st.button("Bajar ventilación", use_container_width=True, key="corral_vent_menos"):
-        if enviar_comando("VENTILACION_BAJAR"):
-            st.success("Orden de disminución enviada.")
-
-with c3:
-    st.markdown("#### 🌡️ Ajuste térmico")
-    if st.button("Subir ajuste térmico", use_container_width=True, key="corral_term_mas"):
-        if enviar_comando("AJUSTE_TERMICO_SUBIR"):
-            st.success("Orden de aumento enviada.")
-    if st.button("Bajar ajuste térmico", use_container_width=True, key="corral_term_menos"):
-        if enviar_comando("AJUSTE_TERMICO_BAJAR"):
-            st.success("Orden de disminución enviada.")
-
-c4, c5 = st.columns(2)
-
-with c4:
-    st.markdown("#### 💧 Ajuste de humedad")
-    if st.button("Subir ajuste de humedad", use_container_width=True, key="corral_hum_mas"):
-        if enviar_comando("HUMEDAD_SUBIR"):
-            st.success("Orden de aumento enviada.")
-    if st.button("Bajar ajuste de humedad", use_container_width=True, key="corral_hum_menos"):
-        if enviar_comando("HUMEDAD_BAJAR"):
-            st.success("Orden de disminución enviada.")
 
 st.divider()
 st.caption(
     "GranjaConecta | ESP32 + Wokwi + MQTT | "
     "Prototipo académico de monitoreo y control del corral de gallinas."
 )
+
