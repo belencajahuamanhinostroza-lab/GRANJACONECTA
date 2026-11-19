@@ -2,6 +2,7 @@
 import hashlib
 import json
 import queue
+import re
 import uuid
 from pathlib import Path
 
@@ -716,7 +717,6 @@ def construir_corral(puerta, ventilacion):
         color_puerta = "#a66a35"
         movimiento_puerta = "translateX(0) rotateY(0)"
 
-    # La ventilación modifica el círculo azul.
     diametro = 18 + (ventilacion * 0.82)
     opacidad_aire = 0.12 + (ventilacion / 100) * 0.22
     intensidad_ventilador = (
@@ -789,7 +789,6 @@ def construir_corral(puerta, ventilacion):
         box-sizing:border-box;
       "></div>
 
-      <!-- Círculo azul de ventilación -->
       <div style="
         position:absolute;
         left:50%;
@@ -810,7 +809,6 @@ def construir_corral(puerta, ventilacion):
         pointer-events:none;
       "></div>
 
-      <!-- Ventilador -->
       <div style="
         position:absolute;
         top:70px;
@@ -820,7 +818,6 @@ def construir_corral(puerta, ventilacion):
         z-index:2;
       ">🌀</div>
 
-      <!-- Suelo del corral -->
       <div style="
         position:absolute;
         bottom:0;left:0;
@@ -831,7 +828,6 @@ def construir_corral(puerta, ventilacion):
         z-index:2;
       "></div>
 
-      <!-- Gallinas -->
       <div style="
         position:absolute;
         bottom:73px;left:18%;
@@ -860,7 +856,6 @@ def construir_corral(puerta, ventilacion):
         z-index:3;
       ">🐔</div>
 
-      <!-- Puerta automática -->
       <div style="
         position:absolute;
         bottom:73px;
@@ -882,7 +877,6 @@ def construir_corral(puerta, ventilacion):
         z-index:4;
       ">🚪</div>
 
-      <!-- Título -->
       <div style="
         position:absolute;
         top:12px;
@@ -894,7 +888,6 @@ def construir_corral(puerta, ventilacion):
         z-index:5;
       ">🐔 CORRAL DE GALLINAS</div>
 
-      <!-- Información inferior -->
       <div style="
         position:absolute;
         bottom:9px;
@@ -977,7 +970,6 @@ def panel_en_vivo():
 
     puerta = datos.get("puerta", "sin dato")
 
-    # Alertas basadas en las lecturas reales.
     alertas = []
 
     try:
@@ -1071,8 +1063,6 @@ def panel_en_vivo():
         "pequeño cuando es baja, mediano cuando es normal y amplio cuando es alta."
     )
 
-    # El dibujo solo recibe la puerta y la ventilación.
-    # Ya no muestra temperatura ni humedad.
     estado_puerta, puerta_abierta = construir_corral(
         puerta,
         ventilacion,
