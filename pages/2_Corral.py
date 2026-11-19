@@ -1,6 +1,7 @@
 import hashlib
 import json
 import queue
+import re
 import threading
 import uuid
 from pathlib import Path
@@ -569,31 +570,43 @@ def numero_porcentaje(valor, predeterminado=0):
         return predeterminado
 
 
-def obtener_estado_temperatura(valor):
+def convertir_lectura(valor):
+    """Convierte lecturas numéricas aunque lleguen con unidad o coma decimal."""
+    if valor is None:
+        return None
+    coincidencia = re.search(r"-?\d+(?:[.,]\d+)?", str(valor))
+    if not coincidencia:
+        return None
     try:
-        v = float(valor)
-    except (TypeError, ValueError):
-        return "SIN DATO", "gray"
+        return float(coincidencia.group(0).replace(",", "."))
+    except ValueError:
+        return None
 
-    # Rangos iniciales configurables para el prototipo.
+
+def obtener_estado_temperatura(valor):
+    v = convertir_lectura(valor)
+    if v is None:
+        return "SIN DATO", "#64748b"
+
+    # Rangos iniciales del prototipo: baja <17 °C; alta >25 °C.
     if v < 17:
-        return "BAJA", "#3b9ddd"
+        return "BAJA", "#1688d4"
     if v > 25:
-        return "ALTA", "#d93636"
-    return "NORMAL", "#29965a"
+        return "ALTA", "#d92d20"
+    return "NORMAL", "#218739"
 
 
 def obtener_estado_humedad(valor):
-    try:
-        v = float(valor)
-    except (TypeError, ValueError):
-        return "SIN DATO", "gray"
+    v = convertir_lectura(valor)
+    if v is None:
+        return "SIN DATO", "#64748b"
 
+    # Rangos iniciales del prototipo: baja <30 %; alta >60 %.
     if v < 30:
-        return "BAJA", "#3b9ddd"
+        return "BAJA", "#1688d4"
     if v > 60:
-        return "ALTA", "#d93636"
-    return "NORMAL", "#29965a"
+        return "ALTA", "#d92d20"
+    return "NORMAL", "#218739"
 
 
 def construir_corral(puerta, ventilacion, temperatura="--", humedad_real="--",
@@ -681,8 +694,8 @@ def construir_corral(puerta, ventilacion, temperatura="--", humedad_real="--",
 
       <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);color:white;font-size:15px;font-weight:bold;z-index:5;">🐔 CORRAL DE GALLINAS</div>
 
-      <div style="position:absolute;top:60px;left:12px;background:{color_temp};color:white;padding:6px 9px;border-radius:8px;font-size:11px;font-weight:bold;z-index:6;">🌡️ TEMP: {estado_temp}</div>
-      <div style="position:absolute;top:60px;right:12px;background:{color_hum};color:white;padding:6px 9px;border-radius:8px;font-size:11px;font-weight:bold;z-index:6;">💧 HUMEDAD: {estado_hum}</div>
+      <div style="position:absolute;top:60px;left:12px;background:{color_temp};color:#ffffff;padding:7px 10px;border:2px solid rgba(255,255,255,.95);box-shadow:0 2px 7px rgba(0,0,0,.25);border-radius:9px;font-size:11px;font-weight:800;z-index:6;">🌡️ TEMPERATURA: {estado_temp} · {convertir_lectura(temperatura) if convertir_lectura(temperatura) is not None else '--'} °C</div>
+      <div style="position:absolute;top:60px;right:12px;background:{color_hum};color:#ffffff;padding:7px 10px;border:2px solid rgba(255,255,255,.95);box-shadow:0 2px 7px rgba(0,0,0,.25);border-radius:9px;font-size:11px;font-weight:800;z-index:6;">💧 HUMEDAD: {estado_hum} · {convertir_lectura(humedad_real) if convertir_lectura(humedad_real) is not None else '--'} %</div>
 
       <div style="
         position:absolute;bottom:9px;left:12px;right:12px;color:white;
@@ -735,7 +748,9 @@ def panel_en_vivo():
     alertas = []
 
     try:
-        temp_num = float(temperatura)
+        temp_num = convertir_lectura(temperatura)
+        if temp_num is None:
+            raise ValueError("Temperatura sin dato numérico")
         if temp_num < 17:
             alertas.append(
                 f"Temperatura baja ({temp_num:.1f} °C). Revisa las condiciones térmicas del corral."
@@ -748,7 +763,9 @@ def panel_en_vivo():
         pass
 
     try:
-        hum_num = float(humedad_real)
+        hum_num = convertir_lectura(humedad_real)
+        if hum_num is None:
+            raise ValueError("Humedad sin dato numérico")
         if hum_num < 30:
             alertas.append(
                 f"Humedad baja ({hum_num:.0f} %). Revisa las condiciones de humedad."
