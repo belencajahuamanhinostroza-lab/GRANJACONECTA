@@ -423,37 +423,37 @@ ACCIONES = {
     2: {
         "nombre": "Aumentar ventilación",
         "comando": "VENTILACION_SUBIR",
-        "emoji": "✌️",
+        "emoji": "👍",
         "detalle": "La ventilación aumenta 25 puntos porcentuales.",
     },
     3: {
         "nombre": "Disminuir ventilación",
         "comando": "VENTILACION_BAJAR",
-        "emoji": "☝️",
+        "emoji": "👎",
         "detalle": "La ventilación disminuye 25 puntos porcentuales.",
     },
     4: {
         "nombre": "Subir ajuste térmico",
         "comando": "AJUSTE_TERMICO_SUBIR",
-        "emoji": "👍",
+        "emoji": "✌️",
         "detalle": "Aumenta 25 puntos el ajuste térmico simulado.",
     },
     5: {
         "nombre": "Bajar ajuste térmico",
         "comando": "AJUSTE_TERMICO_BAJAR",
-        "emoji": "👎",
+        "emoji": "☝️",
         "detalle": "Disminuye 25 puntos el ajuste térmico simulado.",
     },
     6: {
-        "nombre": "Subir ajuste de humedad",
+        "nombre": "Subir humedad",
         "comando": "HUMEDAD_SUBIR",
-        "emoji": "🤟",
+        "emoji": "👌",
         "detalle": "Aumenta 25 puntos el ajuste de humedad simulado.",
     },
     7: {
-        "nombre": "Bajar ajuste de humedad",
+        "nombre": "Bajar humedad",
         "comando": "HUMEDAD_BAJAR",
-        "emoji": "👌",
+        "emoji": "🤙",
         "detalle": "Disminuye 25 puntos el ajuste de humedad simulado.",
     },
 }
@@ -515,8 +515,19 @@ with st.sidebar:
             7. Si la confianza es menor al 80 %, no se envía la orden:
                vuelve a intentarlo.
 
-            **Importante:** realiza las mismas posturas utilizadas para
-            entrenar las ocho clases en Teachable Machine.
+            **Gestos disponibles y su función:**
+
+            - ✋ Abrir puerta.
+            - ✊ Cerrar puerta.
+            - 👍 Aumentar ventilación.
+            - 👎 Disminuir ventilación.
+            - ✌️ Subir ajuste térmico.
+            - ☝️ Bajar ajuste térmico.
+            - 👌 Subir humedad.
+            - 🤙 Bajar humedad.
+
+            **Importante:** realiza exactamente estas señas, tal como fueron
+            utilizadas para entrenar las ocho clases en Teachable Machine.
             """
         )
     st.markdown("---")
@@ -789,42 +800,21 @@ def panel_en_vivo():
         humedad_ajustada,
     )
 
-    st.subheader("📊 Datos recibidos del ESP32")
+    st.subheader("📊 Parámetros controlados por gestos")
+    st.caption("Aquí se muestran únicamente los cuatro parámetros que modifican las señas.")
+
     a, b, c, d = st.columns(4)
-
-    try:
-        temp_texto = f"{float(temperatura):.1f} °C"
-    except (TypeError, ValueError):
-        temp_texto = "--"
-
-    try:
-        humedad_texto = f"{float(humedad_real):.0f} %"
-    except (TypeError, ValueError):
-        humedad_texto = "--"
-
-    a.metric(
-        "🌡️ Temperatura real",
-        temp_texto,
-        obtener_estado_temperatura(temperatura)[0],
-    )
-    b.metric(
-        "💧 Humedad real",
-        humedad_texto,
-        obtener_estado_humedad(humedad_real)[0],
-    )
-    c.metric("🌀 Ventilación", f"{ventilacion} %")
-    d.metric("🚪 Puerta", estado_puerta)
+    a.metric("🚪 Estado de la puerta", estado_puerta)
+    b.metric("🌀 Ventilación", f"{ventilacion}%")
+    c.metric("🌡️ Ajuste térmico", f"{ajuste_termico}%")
+    d.metric("💧 Ajuste de humedad", f"{humedad_ajustada}%")
 
     x, y = st.columns(2)
-    x.metric("🌡️ Ajuste térmico simulado", f"{ajuste_termico}%")
-    x.progress(ajuste_termico / 100)
-    y.metric("💧 Ajuste de humedad simulado", f"{humedad_ajustada}%")
-    y.progress(humedad_ajustada / 100)
-
-    st.caption(
-        "Los ajustes térmico y de humedad son valores simulados. "
-        "El DHT22 continúa mostrando las mediciones ambientales reales."
-    )
+    x.progress(ventilacion / 100, text="Nivel de ventilación")
+    y.progress(ajuste_termico / 100, text="Ajuste térmico")
+    x2, y2 = st.columns(2)
+    x2.progress(humedad_ajustada / 100, text="Ajuste de humedad")
+    y2.caption("Los ajustes térmico y de humedad son simulados; no modifican físicamente la temperatura o la humedad.")
 
     if st.session_state.respuestas_esp32:
         with st.expander("Mensajes de respuesta del ESP32"):
@@ -938,8 +928,8 @@ with col_control:
         (3, "Disminuir ventilación", "Disminuye 25 puntos la ventilación."),
         (4, "Subir ajuste térmico", "Aumenta 25 puntos el ajuste térmico."),
         (5, "Bajar ajuste térmico", "Disminuye 25 puntos el ajuste térmico."),
-        (6, "Subir ajuste de humedad", "Aumenta 25 puntos el ajuste de humedad."),
-        (7, "Bajar ajuste de humedad", "Disminuye 25 puntos el ajuste de humedad."),
+        (6, "Subir humedad", "Aumenta 25 puntos el ajuste de humedad."),
+        (7, "Bajar humedad", "Disminuye 25 puntos el ajuste de humedad."),
     ]
 
     for fila_inicio in range(0, len(tarjetas_gestos), 2):
