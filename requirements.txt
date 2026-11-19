@@ -6,4 +6,4 @@ paho-mqtt==2.1.0
 gTTS
 streamlit-mic-recorder
 SpeechRecognition
-
+streamlit-autorefresh
