@@ -1,5 +1,8 @@
-streamlit
-paho-mqtt==2.1.0
+streamlit>=1.37
 tensorflow==2.15.1
 numpy==1.26.4
-Pillow
+Pillow>=10.0.0
+paho-mqtt==2.1.0
+gTTS
+streamlit-mic-recorder
+
