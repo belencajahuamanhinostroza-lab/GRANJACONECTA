@@ -1,9 +1,24 @@
 
 import streamlit as st
 import streamlit.components.v1 as components
-import unicodedata
+import streamlit.autorefresh
+import paho.mqtt.client as mqtt
+import json
+import queue
 import re
-import hashlib
+import unicodedata
+import io
+import time
+
+from threading import Lock
+
+try:
+    from streamlit_mic_recorder import mic_recorder
+    import speech_recognition as sr
+    MICROFONO_DISPONIBLE = True
+except ImportError:
+    MICROFONO_DISPONIBLE = False
+
 
 # =========================================================
 # 1. CONFIGURACIÓN
@@ -15,14 +30,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# Micrófono opcional
-try:
-    from streamlit_mic_recorder import mic_recorder
-    import speech_recognition as sr
-    MICROFONO_DISPONIBLE = True
-except ImportError:
-    MICROFONO_DISPONIBLE = False
-
+BROKER = "broker.mqttdashboard.com"
+PUERTO = 1883
+TOPIC = "granjaconecta"
 
 # =========================================================
 # 2. ESTILOS
@@ -30,261 +40,317 @@ except ImportError:
 
 st.markdown("""
 <style>
-    .stApp {
-        background-color: #EDF5E9;
-        color: #17472D;
-    }
+.stApp {
+    background-color: #EDF5E9;
+    color: #17472D;
+}
 
-    [data-testid="stSidebar"] {
-        background-color: #DCEBD8;
-    }
+[data-testid="stSidebar"] {
+    background-color: #DCEBD8;
+}
 
-    h1, h2, h3, h4, p, label {
-        color: #17472D !important;
-    }
+h1, h2, h3, h4, p, label {
+    color: #17472D !important;
+}
 
-    .titulo-principal {
-        color: #17472D;
-        font-size: 34px;
-        font-weight: 800;
-        margin-bottom: 5px;
-    }
+.titulo {
+    color: #17472D;
+    font-size: 34px;
+    font-weight: 800;
+}
 
-    .subtitulo {
-        color: #52735A;
-        font-size: 15px;
-        margin-bottom: 20px;
-    }
+.subtitulo {
+    color: #52735A;
+    font-size: 15px;
+    margin-bottom: 18px;
+}
 
-    .tarjeta {
-        background: #FFFFFF;
-        border: 1px solid #C9DDC5;
-        border-radius: 15px;
-        padding: 18px;
-        min-height: 115px;
-        box-shadow: 0 2px 8px rgba(23,71,45,0.06);
-    }
+.tarjeta {
+    background: white;
+    border: 1px solid #C9DDC5;
+    border-radius: 15px;
+    padding: 17px;
+    margin-bottom: 10px;
+}
 
-    .tarjeta-titulo {
-        color: #52735A;
-        font-size: 13px;
-        font-weight: 700;
-        margin-bottom: 8px;
-    }
+div.stButton > button {
+    background: #17472D;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-weight: bold;
+    min-height: 43px;
+    width: 100%;
+}
 
-    .tarjeta-valor {
-        color: #17472D;
-        font-size: 25px;
-        font-weight: 800;
-    }
+div.stButton > button:hover {
+    background: #286341;
+    color: white;
+}
 
-    .tarjeta-detalle {
-        color: #66816A;
-        font-size: 12px;
-        margin-top: 5px;
-    }
+div[data-testid="stMetric"] {
+    background: white;
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid #C9DDC5;
+}
 
-    div.stButton > button {
-        background-color: #17472D;
-        color: white;
-        border: none;
-        border-radius: 10px;
-        font-weight: 700;
-        min-height: 43px;
-        width: 100%;
-    }
+div[data-testid="stMetric"] label {
+    color: #52735A !important;
+}
 
-    div.stButton > button:hover {
-        background-color: #286341;
-        color: white;
-        border: 1px solid #286341;
-    }
+div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+    color: #17472D !important;
+}
 
-    div.stButton > button:focus {
-        color: white;
-        border-color: #17472D;
-    }
-
-    div[data-testid="stFormSubmitButton"] button {
-        background-color: #17472D;
-        color: white;
-        border-radius: 10px;
-        font-weight: bold;
-    }
-
-    div[data-testid="stFormSubmitButton"] button:hover {
-        background-color: #286341;
-        color: white;
-    }
-
-    div[data-testid="stMetric"] {
-        background: white;
-        padding: 15px;
-        border-radius: 12px;
-        border: 1px solid #C9DDC5;
-    }
-
-    div[data-testid="stMetric"] label {
-        color: #52735A !important;
-    }
-
-    div[data-testid="stMetric"] [data-testid="stMetricValue"] {
-        color: #17472D !important;
-    }
-
-    hr {
-        border-color: #C9DDC5;
-    }
-
-    .aviso {
-        background: #FFFFFF;
-        border-left: 5px solid #238A80;
-        padding: 13px;
-        border-radius: 8px;
-        color: #17472D;
-        margin: 10px 0;
-    }
+hr {
+    border-color: #C9DDC5;
+}
 </style>
 """, unsafe_allow_html=True)
 
 
 # =========================================================
-# 3. ESTADO DE LA SIMULACIÓN
+# 3. ESTADO INICIAL
 # =========================================================
 
-if "nivel_agua" not in st.session_state:
-    st.session_state.nivel_agua = 50.0
+if "telemetria" not in st.session_state:
+    st.session_state.telemetria = {
+        "temperatura": 0,
+        "humedad": 0,
+        "lecturaDHTValida": False,
+        "agua": 0,
+        "nivelAgua": 0,
+        "distancia": 0,
+        "distanciaHC": 0,
+        "lecturaHCValida": False,
+        "lecturaAguaValida": False,
+        "estadoAgua": "ESPERANDO DATOS",
+        "puerta": "cerrada",
+        "valvula": "cerrada",
+        "vaciando": False,
+        "ventilacion": 0,
+        "ajusteTermico": 0,
+        "humedadVisual": 0
+    }
 
-if "valvula_abierta" not in st.session_state:
-    st.session_state.valvula_abierta = False
+if "conexion_mqtt" not in st.session_state:
+    st.session_state.conexion_mqtt = False
 
-if "vaciando" not in st.session_state:
-    st.session_state.vaciando = False
+if "respuesta" not in st.session_state:
+    st.session_state.respuesta = (
+        "Esperando conexión con el ESP32."
+    )
 
 if "historial" not in st.session_state:
     st.session_state.historial = []
 
-if "respuesta" not in st.session_state:
-    st.session_state.respuesta = (
-        "¡Hola! Puedes darme una orden para controlar el bebedero."
-    )
+if "alertas" not in st.session_state:
+    st.session_state.alertas = []
 
-if "distancia_control" not in st.session_state:
-    st.session_state.distancia_control = 30 - (
-        st.session_state.nivel_agua / 90 * 20
-    )
+if "ultimo_audio" not in st.session_state:
+    st.session_state.ultimo_audio = None
 
+if "ultimo_mensaje_esp" not in st.session_state:
+    st.session_state.ultimo_mensaje_esp = ""
 
-# =========================================================
-# 4. FUNCIONES DEL BEBEDERO
-# =========================================================
-
-def calcular_distancia(nivel):
-    """
-    Simulación:
-    0 % de agua  = 30 cm
-    90 % de agua = 10 cm
-    """
-    distancia = 30 - (nivel / 90) * 20
-    return round(distancia, 1)
-
-
-def calcular_nivel(distancia):
-    distancia = max(10, min(30, float(distancia)))
-    nivel = ((30 - distancia) / 20) * 90
-    return max(0, min(90, nivel))
-
-
-def obtener_estado(distancia):
-    if distancia < 10:
-        return "Posible desbordamiento", "🔴"
-
-    if distancia <= 10:
-        return "Lleno", "🟢"
-
-    if distancia >= 30:
-        return "Vacío", "🔴"
-
-    if distancia > 25:
-        return "Nivel bajo", "🟠"
-
-    return "Nivel normal", "🟢"
-
-
-def obtener_altura(nivel):
-    return max(0, min(100, (nivel / 90) * 100))
-
-
-def abrir_valvula():
-    st.session_state.valvula_abierta = True
-    st.session_state.vaciando = False
-
-    if st.session_state.nivel_agua >= 90:
-        st.session_state.valvula_abierta = False
-        st.session_state.respuesta = (
-            "El bebedero ya está lleno. La válvula permanece cerrada."
-        )
-        return
-
-    st.session_state.nivel_agua = min(
-        90,
-        st.session_state.nivel_agua + 10
-    )
-
-    if st.session_state.nivel_agua >= 90:
-        st.session_state.valvula_abierta = False
-        st.session_state.respuesta = (
-            "El bebedero llegó al nivel máximo. "
-            "La válvula se cerró automáticamente en la simulación."
-        )
-    else:
-        st.session_state.respuesta = (
-            "Válvula abierta. El nivel de agua aumentó en la simulación."
-        )
-
-    actualizar_control()
-
-
-def cerrar_valvula():
-    st.session_state.valvula_abierta = False
-    st.session_state.vaciando = False
-    st.session_state.respuesta = (
-        "Válvula cerrada. El nivel de agua se mantiene."
-    )
-
-
-def llenar_bebedero():
-    st.session_state.vaciando = False
-    st.session_state.nivel_agua = 90
-    st.session_state.valvula_abierta = False
-    st.session_state.respuesta = (
-        "Bebedero lleno. La válvula se cerró automáticamente."
-    )
-    actualizar_control()
-
-
-def vaciar_bebedero():
-    st.session_state.valvula_abierta = False
-    st.session_state.vaciando = True
-    st.session_state.nivel_agua = 0
-    st.session_state.vaciando = False
-    st.session_state.respuesta = (
-        "El bebedero se ha vaciado en la simulación."
-    )
-    actualizar_control()
-
-
-def actualizar_control():
-    st.session_state.distancia_control = calcular_distancia(
-        st.session_state.nivel_agua
-    )
+if "ultimo_comando" not in st.session_state:
+    st.session_state.ultimo_comando = ""
 
 
 # =========================================================
-# 5. INTERPRETACIÓN DE COMANDOS
+# 4. COLA DE MENSAJES MQTT
+# =========================================================
+
+# El hilo MQTT guarda los mensajes en una cola.
+# Streamlit los procesa desde el hilo principal.
+
+mensajes_mqtt = queue.Queue()
+mqtt_lock = Lock()
+
+
+# =========================================================
+# 5. CONEXIÓN MQTT
+# =========================================================
+
+@st.cache_resource
+def crear_cliente_mqtt():
+
+    cliente = mqtt.Client(
+        callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+        client_id="STREAMLIT_BEBEDERO"
+    )
+
+    def al_conectar(client, userdata, flags, reason_code, properties):
+
+        if reason_code == 0:
+            client.subscribe(TOPIC)
+            mensajes_mqtt.put({
+                "tipo_interno": "conexion",
+                "estado": True
+            })
+        else:
+            mensajes_mqtt.put({
+                "tipo_interno": "conexion",
+                "estado": False
+            })
+
+    def al_desconectar(client, userdata, disconnect_flags,
+                       reason_code, properties):
+
+        mensajes_mqtt.put({
+            "tipo_interno": "conexion",
+            "estado": False
+        })
+
+    def al_recibir(client, userdata, msg):
+
+        try:
+            contenido = json.loads(
+                msg.payload.decode("utf-8")
+            )
+
+            mensajes_mqtt.put(contenido)
+
+        except Exception as error:
+            print("Error leyendo MQTT:", error)
+
+    cliente.on_connect = al_conectar
+    cliente.on_disconnect = al_desconectar
+    cliente.on_message = al_recibir
+
+    try:
+        cliente.connect(
+            BROKER,
+            PUERTO,
+            keepalive=60
+        )
+
+        cliente.loop_start()
+
+    except Exception as error:
+        print("Error de conexión MQTT:", error)
+
+    return cliente
+
+
+cliente = crear_cliente_mqtt()
+
+
+# =========================================================
+# 6. RECIBIR MENSAJES DEL ESP32
+# =========================================================
+
+def procesar_mensajes_recibidos():
+
+    while True:
+
+        try:
+            mensaje = mensajes_mqtt.get_nowait()
+
+        except queue.Empty:
+            break
+
+        tipo = mensaje.get("tipo")
+
+        if mensaje.get("tipo_interno") == "conexion":
+
+            st.session_state.conexion_mqtt = mensaje["estado"]
+
+            if mensaje["estado"]:
+                st.session_state.respuesta = (
+                    "Conexión MQTT establecida. "
+                    "Esperando telemetría del ESP32."
+                )
+            else:
+                st.session_state.respuesta = (
+                    "Se perdió la conexión MQTT."
+                )
+
+            continue
+
+        if tipo == "telemetria":
+
+            datos = mensaje.get("datos", {})
+
+            st.session_state.telemetria.update(datos)
+
+            st.session_state.conexion_mqtt = True
+
+        elif tipo == "respuesta":
+
+            texto = mensaje.get(
+                "message",
+                "El ESP32 recibió una orden."
+            )
+
+            st.session_state.ultimo_mensaje_esp = texto
+            st.session_state.respuesta = texto
+
+
+procesar_mensajes_recibidos()
+
+
+# =========================================================
+# 7. ENVIAR COMANDOS MQTT
+# =========================================================
+
+def enviar_comando(comando):
+
+    if not cliente.is_connected():
+
+        st.session_state.respuesta = (
+            "No hay conexión con MQTT. "
+            "Verifica que Wokwi esté ejecutándose."
+        )
+
+        return False
+
+    mensaje = {
+        "tipo": "comando",
+        "command": comando
+    }
+
+    try:
+
+        resultado = cliente.publish(
+            TOPIC,
+            json.dumps(mensaje),
+            qos=0
+        )
+
+        if resultado.rc != mqtt.MQTT_ERR_SUCCESS:
+
+            st.session_state.respuesta = (
+                "No se pudo enviar la orden MQTT."
+            )
+
+            return False
+
+        st.session_state.ultimo_comando = comando
+
+        st.session_state.respuesta = (
+            f"Orden enviada al ESP32: {comando}. "
+            "Esperando confirmación."
+        )
+
+        return True
+
+    except Exception as error:
+
+        st.session_state.respuesta = (
+            f"Error enviando la orden: {error}"
+        )
+
+        return False
+
+
+# =========================================================
+# 8. INTERPRETAR VOZ Y TEXTO
 # =========================================================
 
 def normalizar(texto):
+
     texto = texto.lower().strip()
 
     texto = unicodedata.normalize(
@@ -297,165 +363,316 @@ def normalizar(texto):
         if unicodedata.category(c) != "Mn"
     )
 
-    texto = re.sub(r"[¿?¡!.,;:]", "", texto)
-
     return texto
 
 
-def procesar_mensaje(mensaje):
-    texto = normalizar(mensaje)
+def procesar_orden(texto):
 
-    if not texto:
-        return "Escribe una orden para controlar el bebedero."
+    mensaje = normalizar(texto)
 
-    # CERRAR VÁLVULA
-    if any(x in texto for x in [
-        "cerrar valvula",
-        "cierra valvula",
-        "apaga valvula",
-        "detener llenado",
-        "detener el agua",
-        "para el agua"
+    if not mensaje:
+        return
+
+    comando = None
+
+    # PUERTA
+    if any(x in mensaje for x in [
+        "abrir puerta",
+        "abre la puerta",
+        "abre puerta"
     ]):
-        cerrar_valvula()
-        return st.session_state.respuesta
+        comando = "PUERTA_ABRIR"
 
-    # VACIAR
-    if any(x in texto for x in [
+    elif any(x in mensaje for x in [
+        "cerrar puerta",
+        "cierra la puerta",
+        "cierra puerta"
+    ]):
+        comando = "PUERTA_CERRAR"
+
+    # VÁLVULA
+    elif any(x in mensaje for x in [
+        "abrir valvula",
+        "abre la valvula",
+        "abre valvula",
+        "iniciar llenado"
+    ]):
+        comando = "VALVULA_ABRIR"
+
+    elif any(x in mensaje for x in [
+        "cerrar valvula",
+        "cierra la valvula",
+        "detener llenado",
+        "detener el agua"
+    ]):
+        comando = "VALVULA_CERRAR"
+
+    # BEBEDERO
+    elif any(x in mensaje for x in [
         "vaciar",
         "vacia el bebedero",
-        "drenar",
-        "sacar el agua"
+        "vaciar el bebedero",
+        "drenar el bebedero"
     ]):
-        vaciar_bebedero()
-        return st.session_state.respuesta
+        comando = "BEBEDERO_VACIAR"
 
-    # LLENAR COMPLETAMENTE
-    if any(x in texto for x in [
+    elif any(x in mensaje for x in [
         "llenar completamente",
         "llena completamente",
         "llenar el bebedero",
         "llena el bebedero",
-        "llenar",
-        "llenalo"
+        "llenar bebedero",
+        "llena bebedero"
     ]):
-        llenar_bebedero()
-        return st.session_state.respuesta
+        comando = "BEBEDERO_LLENO"
 
-    # ABRIR VÁLVULA
-    if any(x in texto for x in [
-        "abrir valvula",
-        "abre valvula",
-        "activar valvula",
-        "iniciar llenado",
-        "dejar pasar agua"
+    # VENTILACIÓN
+    elif any(x in mensaje for x in [
+        "aumentar ventilacion",
+        "subir ventilacion",
+        "mas ventilacion"
     ]):
-        abrir_valvula()
-        return st.session_state.respuesta
+        comando = "VENTILACION_SUBIR"
 
-    # CONSULTAS
-    distancia = calcular_distancia(
-        st.session_state.nivel_agua
-    )
-
-    estado, emoji = obtener_estado(distancia)
-
-    if any(x in texto for x in [
-        "distancia",
-        "centimetros",
-        "cuantos cm"
+    elif any(x in mensaje for x in [
+        "disminuir ventilacion",
+        "bajar ventilacion",
+        "menos ventilacion"
     ]):
-        return (
-            f"La distancia actual es de {distancia} centímetros."
+        comando = "VENTILACION_BAJAR"
+
+    # TEMPERATURA
+    elif any(x in mensaje for x in [
+        "subir temperatura",
+        "aumentar temperatura",
+        "mas temperatura"
+    ]):
+        comando = "AJUSTE_TERMICO_SUBIR"
+
+    elif any(x in mensaje for x in [
+        "bajar temperatura",
+        "disminuir temperatura",
+        "menos temperatura"
+    ]):
+        comando = "AJUSTE_TERMICO_BAJAR"
+
+    # HUMEDAD
+    elif any(x in mensaje for x in [
+        "subir humedad",
+        "aumentar humedad"
+    ]):
+        comando = "HUMEDAD_SUBIR"
+
+    elif any(x in mensaje for x in [
+        "bajar humedad",
+        "disminuir humedad"
+    ]):
+        comando = "HUMEDAD_BAJAR"
+
+    # CONSULTAS LOCALES
+    elif any(x in mensaje for x in [
+        "cuantos centimetros",
+        "distancia del agua",
+        "distancia hay"
+    ]):
+
+        datos = st.session_state.telemetria
+
+        if datos.get("lecturaAguaValida"):
+
+            st.session_state.respuesta = (
+                f"La distancia hasta el agua es de "
+                f"{datos.get('distancia', 0):.1f} centímetros."
+            )
+
+        else:
+
+            st.session_state.respuesta = (
+                "Todavía no recibo una lectura válida del bebedero."
+            )
+
+        return
+
+    elif any(x in mensaje for x in [
+        "estado del bebedero",
+        "nivel de agua",
+        "como esta el bebedero",
+        "como esta el agua"
+    ]):
+
+        datos = st.session_state.telemetria
+
+        if datos.get("lecturaAguaValida"):
+
+            st.session_state.respuesta = (
+                f"El estado del bebedero es "
+                f"{datos.get('estadoAgua', 'sin datos')}. "
+                f"El nivel es {datos.get('nivelAgua', 0):.1f} "
+                f"por ciento y la distancia es "
+                f"{datos.get('distancia', 0):.1f} centímetros."
+            )
+
+        else:
+
+            st.session_state.respuesta = (
+                "No tengo una lectura válida del bebedero."
+            )
+
+        return
+
+    elif any(x in mensaje for x in [
+        "estado de la valvula",
+        "esta abierta la valvula",
+        "esta cerrada la valvula"
+    ]):
+
+        valvula = st.session_state.telemetria.get(
+            "valvula",
+            "desconocida"
         )
 
-    if any(x in texto for x in [
-        "estado",
-        "nivel",
-        "como esta",
-        "como se encuentra"
-    ]):
-        return (
-            f"El bebedero está en estado: {estado}. "
-            f"La distancia es de {distancia} centímetros."
+        st.session_state.respuesta = (
+            f"La válvula está {valvula}."
         )
 
-    if any(x in texto for x in [
-        "valvula",
-        "esta abierta",
-        "esta cerrada"
+        return
+
+    elif any(x in mensaje for x in [
+        "temperatura actual",
+        "cuanta temperatura",
+        "temperatura del corral"
     ]):
-        estado_valvula = (
-            "abierta"
-            if st.session_state.valvula_abierta
-            else "cerrada"
-        )
 
-        return f"La válvula está {estado_valvula}."
+        datos = st.session_state.telemetria
 
-    if any(x in texto for x in [
-        "hola",
-        "buenos dias",
-        "buenas tardes",
-        "buenas noches"
+        if datos.get("lecturaDHTValida"):
+
+            st.session_state.respuesta = (
+                f"La temperatura actual es de "
+                f"{datos.get('temperatura', 0):.1f} grados Celsius."
+            )
+
+        else:
+
+            st.session_state.respuesta = (
+                "No hay una lectura válida de temperatura."
+            )
+
+        return
+
+    elif any(x in mensaje for x in [
+        "humedad actual",
+        "cuanta humedad",
+        "humedad del corral"
     ]):
-        return (
-            "¡Hola! Soy GranjaConecta. "
-            "Puedo ayudarte a controlar y consultar el bebedero."
-        )
 
-    return (
-        "No reconocí esa solicitud. Puedes pedirme abrir la válvula, "
-        "cerrarla, llenar o vaciar el bebedero, o consultar su estado."
-    )
+        datos = st.session_state.telemetria
+
+        if datos.get("lecturaDHTValida"):
+
+            st.session_state.respuesta = (
+                f"La humedad actual es de "
+                f"{datos.get('humedad', 0):.1f} por ciento."
+            )
+
+        else:
+
+            st.session_state.respuesta = (
+                "No hay una lectura válida de humedad."
+            )
+
+        return
+
+    if comando:
+
+        enviado = enviar_comando(comando)
+
+        if enviado:
+
+            st.session_state.historial.append({
+                "usuario": texto,
+                "asistente": (
+                    f"Orden enviada: {comando}. "
+                    "Estoy esperando la respuesta del dispositivo."
+                )
+            })
+
+    else:
+
+        st.session_state.respuesta = (
+            "No reconocí esa orden. Puedes pedirme abrir o cerrar "
+            "la válvula, llenar o vaciar el bebedero, o consultar "
+            "el estado del agua."
+        )
 
 
 # =========================================================
-# 6. ENCABEZADO
+# 9. ACTUALIZACIÓN AUTOMÁTICA
+# =========================================================
+
+st.autorefresh.st_autorefresh(
+    interval=2000,
+    key="actualizacion_bebedero"
+)
+
+# Procesar los mensajes recibidos durante el refresco
+procesar_mensajes_recibidos()
+
+
+# =========================================================
+# 10. ENCABEZADO
 # =========================================================
 
 st.markdown(
-    '<div class="titulo-principal">🐔 GranjaConecta</div>',
+    '<div class="titulo">🐔 GranjaConecta</div>',
     unsafe_allow_html=True
 )
 
 st.markdown(
     '<div class="subtitulo">'
-    'Control y monitoreo inteligente del bebedero'
+    'Control inteligente del bebedero mediante voz, texto y MQTT'
     '</div>',
     unsafe_allow_html=True
 )
 
-st.markdown(
-    '<div class="aviso">'
-    '🧪 <b>Modo de prueba:</b> la interfaz está funcionando '
-    'con datos simulados. Todavía no está conectada al ESP32.'
-    '</div>',
-    unsafe_allow_html=True
+if cliente.is_connected():
+
+    st.success("🟢 Conectado al servidor MQTT")
+
+else:
+
+    st.error("🔴 Sin conexión MQTT. Comprueba Wokwi y el broker.")
+
+
+# =========================================================
+# 11. DATOS RECIBIDOS
+# =========================================================
+
+datos = st.session_state.telemetria
+
+lectura_valida = datos.get(
+    "lecturaAguaValida",
+    False
 )
 
-st.divider()
+distancia = float(datos.get("distancia", 0) or 0)
+nivel = float(datos.get("nivelAgua", 0) or 0)
 
-
-# =========================================================
-# 7. DATOS ACTUALES
-# =========================================================
-
-nivel = st.session_state.nivel_agua
-distancia = calcular_distancia(nivel)
-estado, emoji = obtener_estado(distancia)
-
-valvula = (
-    "Abierta"
-    if st.session_state.valvula_abierta
-    else "Cerrada"
+estado_agua = datos.get(
+    "estadoAgua",
+    "ESPERANDO DATOS"
 )
 
-altura = obtener_altura(nivel)
+valvula = datos.get(
+    "valvula",
+    "desconocida"
+)
+
+vaciando = datos.get("vaciando", False)
 
 
 # =========================================================
-# 8. DISTRIBUCIÓN PRINCIPAL
+# 12. VISUALIZACIÓN
 # =========================================================
 
 columna_dibujo, columna_datos = st.columns(
@@ -465,7 +682,21 @@ columna_dibujo, columna_datos = st.columns(
 
 with columna_dibujo:
 
-    st.markdown("### 🐔 Visualización del bebedero")
+    st.markdown("### 🐔 Bebedero")
+
+    if lectura_valida:
+
+        altura = max(
+            0,
+            min(100, (nivel / 90) * 100)
+        )
+
+        etiqueta = f"{distancia:.1f} cm"
+
+    else:
+
+        altura = 0
+        etiqueta = "Sin lectura"
 
     dibujo = f"""
     <!DOCTYPE html>
@@ -474,127 +705,90 @@ with columna_dibujo:
     <meta charset="UTF-8">
 
     <style>
-        * {{
-            box-sizing: border-box;
-        }}
+    * {{
+        box-sizing: border-box;
+    }}
 
-        body {{
-            margin: 0;
-            padding: 0;
-            background: transparent;
-            font-family: Arial, sans-serif;
-        }}
+    body {{
+        margin: 0;
+        background: transparent;
+        font-family: Arial, sans-serif;
+    }}
 
-        .zona {{
-            width: 100%;
-            height: 330px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }}
+    .zona {{
+        height: 330px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }}
 
-        .bebedero {{
-            width: 210px;
-            height: 270px;
-            position: relative;
-            overflow: hidden;
-            border: 5px solid #17472D;
-            border-radius: 18px 18px 35px 35px;
-            background: #F8FFF6;
-            box-shadow: 0 5px 12px rgba(23,71,45,0.12);
-        }}
+    .bebedero {{
+        width: 210px;
+        height: 270px;
+        position: relative;
+        overflow: hidden;
+        border: 5px solid #17472D;
+        border-radius: 18px 18px 35px 35px;
+        background: #F8FFF6;
+    }}
 
-        .borde {{
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 10px;
-            background: #17472D;
-            z-index: 4;
-        }}
+    .agua {{
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: {altura:.1f}%;
+        background: linear-gradient(
+            to top,
+            #168477,
+            #43BFA8,
+            #8AE0C9
+        );
+        transition: height 0.8s ease;
+    }}
 
-        .agua {{
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: {altura:.1f}%;
-            background: linear-gradient(
-                to top,
-                #168477,
-                #43BFA8,
-                #8AE0C9
-            );
-            transition: height 0.8s ease;
-            z-index: 1;
-        }}
+    .etiqueta {{
+        position: absolute;
+        top: 20px;
+        width: 100%;
+        text-align: center;
+        color: #17472D;
+        font-size: 15px;
+        font-weight: bold;
+        z-index: 3;
+    }}
 
-        .superficie {{
-            position: absolute;
-            top: -7px;
-            left: 0;
-            width: 100%;
-            height: 13px;
-            background: rgba(255,255,255,0.35);
-            border-radius: 50%;
-        }}
+    .nivel {{
+        position: absolute;
+        bottom: 15px;
+        width: 100%;
+        text-align: center;
+        color: white;
+        font-size: 15px;
+        font-weight: bold;
+        text-shadow: 0 1px 3px #17472D;
+        z-index: 3;
+    }}
 
-        .etiqueta {{
-            position: absolute;
-            top: 20px;
-            width: 100%;
-            text-align: center;
-            color: #17472D;
-            font-size: 15px;
-            font-weight: bold;
-            z-index: 5;
-        }}
-
-        .nivel {{
-            position: absolute;
-            bottom: 15px;
-            width: 100%;
-            text-align: center;
-            color: #FFFFFF;
-            font-size: 15px;
-            font-weight: bold;
-            text-shadow: 0 1px 3px #17472D;
-            z-index: 5;
-        }}
-
-        .base {{
-            position: absolute;
-            bottom: -5px;
-            left: -12px;
-            width: calc(100% + 24px);
-            height: 9px;
-            background: #17472D;
-            z-index: 6;
-        }}
+    .borde {{
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 10px;
+        background: #17472D;
+        z-index: 4;
+    }}
     </style>
     </head>
 
     <body>
         <div class="zona">
             <div class="bebedero">
-
                 <div class="borde"></div>
-
-                <div class="etiqueta">
-                    AGUA
-                </div>
-
-                <div class="agua">
-                    <div class="superficie"></div>
-                </div>
-
-                <div class="nivel">
-                    {distancia:.1f} cm
-                </div>
-
-                <div class="base"></div>
-
+                <div class="etiqueta">AGUA</div>
+                <div class="agua"></div>
+                <div class="nivel">{etiqueta}</div>
             </div>
         </div>
     </body>
@@ -607,189 +801,240 @@ with columna_dibujo:
         scrolling=False
     )
 
-    st.caption(
-        "Representación visual del nivel de agua. "
-        "La distancia se mide desde el sensor simulado "
-        "hasta la superficie del agua."
-    )
+    if lectura_valida:
+        st.caption(
+            "Visualización actualizada con la telemetría del ESP32."
+        )
+    else:
+        st.warning(
+            "Esperando la primera lectura de agua del ESP32."
+        )
 
 
 with columna_datos:
 
-    st.markdown("### 📊 Estado del bebedero")
+    st.markdown("### 📊 Monitoreo")
 
-    st.metric(
-        label="Distancia hasta el agua",
-        value=f"{distancia:.1f} cm",
-        help="Medición simulada desde el sensor hasta el agua."
-    )
+    if lectura_valida:
 
-    st.metric(
-        label="Estado del agua",
-        value=f"{emoji} {estado}"
-    )
+        st.metric(
+            "Distancia hasta el agua",
+            f"{distancia:.1f} cm"
+        )
 
-    st.metric(
-        label="Estado de la válvula",
-        value=valvula
-    )
+        st.metric(
+            "Nivel de agua",
+            f"{nivel:.1f} %"
+        )
 
-    if st.session_state.valvula_abierta:
-        st.success("💧 La válvula está abierta.")
+        st.metric(
+            "Estado del agua",
+            estado_agua
+        )
+
+        st.metric(
+            "Estado de la válvula",
+            valvula.upper()
+        )
+
+        if vaciando:
+            st.info("💧 El bebedero se está vaciando.")
+        elif valvula == "abierta":
+            st.info("💧 El bebedero se está llenando.")
+        else:
+            st.success("🔒 Válvula cerrada.")
+
     else:
-        st.info("🔒 La válvula está cerrada.")
 
-    if estado == "Vacío":
-        st.error("El bebedero está vacío. Se recomienda llenarlo.")
-    elif estado == "Nivel bajo":
-        st.warning("El nivel de agua está bajo.")
-    elif estado == "Lleno":
-        st.success("El bebedero alcanzó el nivel máximo.")
-    elif estado == "Posible desbordamiento":
-        st.error("¡Atención! Posible desbordamiento.")
-    else:
-        st.success("El nivel de agua es normal.")
+        st.info(
+            "Los indicadores aparecerán cuando llegue "
+            "la telemetría del ESP32."
+        )
 
 
 st.divider()
 
 
 # =========================================================
-# 9. CONTROLES DE PRUEBA
+# 13. ALERTAS
+# =========================================================
+
+st.markdown("### 🚨 Alertas del bebedero")
+
+alertas_actuales = []
+
+if not cliente.is_connected():
+
+    alertas_actuales.append(
+        ("error", "Sin conexión MQTT con el dispositivo.")
+    )
+
+if not lectura_valida:
+
+    alertas_actuales.append(
+        ("warning", "No se ha recibido una lectura válida del agua.")
+    )
+
+else:
+
+    if distancia >= 30:
+
+        alertas_actuales.append(
+            ("error", "Bebedero vacío. Se recomienda llenarlo.")
+        )
+
+    elif distancia > 25:
+
+        alertas_actuales.append(
+            ("warning", "Nivel de agua bajo.")
+        )
+
+    elif distancia <= 10:
+
+        alertas_actuales.append(
+            ("success", "Bebedero lleno. Comprueba que la válvula esté cerrada.")
+        )
+
+    elif distancia < 10:
+
+        alertas_actuales.append(
+            ("error", "Lectura por debajo del límite de llenado.")
+        )
+
+    if valvula == "abierta" and nivel >= 90:
+
+        alertas_actuales.append(
+            ("warning", "La válvula sigue abierta con el nivel máximo.")
+        )
+
+if not datos.get("lecturaDHTValida", False):
+
+    alertas_actuales.append(
+        ("warning", "No hay lectura válida del sensor DHT22.")
+    )
+
+if datos.get("lecturaHCValida", False):
+
+    distancia_fisica = float(
+        datos.get("distanciaHC", 0) or 0
+    )
+
+    if distancia_fisica < 2 or distancia_fisica > 400:
+
+        alertas_actuales.append(
+            ("warning", "El sensor HC-SR04 presenta una lectura fuera de rango.")
+        )
+
+for tipo, mensaje in alertas_actuales:
+
+    if tipo == "error":
+        st.error("🔴 " + mensaje)
+
+    elif tipo == "warning":
+        st.warning("🟠 " + mensaje)
+
+    else:
+        st.success("🟢 " + mensaje)
+
+if not alertas_actuales:
+
+    st.success("🟢 No hay alertas activas.")
+
+
+st.divider()
+
+
+# =========================================================
+# 14. CONTROL MANUAL
 # =========================================================
 
 st.markdown("### 🎛️ Control del bebedero")
 
-st.write(
-    "Prueba los botones para comprobar cómo cambia "
-    "el nivel de agua en el dibujo."
-)
+b1, b2, b3, b4 = st.columns(4)
 
-boton1, boton2, boton3, boton4 = st.columns(4)
+with b1:
 
-with boton1:
-    st.button(
-        "💧 Abrir válvula",
-        key="btn_abrir",
-        on_click=abrir_valvula
-    )
+    if st.button("💧 Abrir válvula"):
 
-with boton2:
-    st.button(
-        "🔒 Cerrar válvula",
-        key="btn_cerrar",
-        on_click=cerrar_valvula
-    )
+        enviar_comando("VALVULA_ABRIR")
+        st.rerun()
 
-with boton3:
-    st.button(
-        "⬆️ Llenar",
-        key="btn_llenar",
-        on_click=llenar_bebedero
-    )
+with b2:
 
-with boton4:
-    st.button(
-        "⬇️ Vaciar",
-        key="btn_vaciar",
-        on_click=vaciar_bebedero
-    )
+    if st.button("🔒 Cerrar válvula"):
+
+        enviar_comando("VALVULA_CERRAR")
+        st.rerun()
+
+with b3:
+
+    if st.button("⬆️ Llenar"):
+
+        enviar_comando("BEBEDERO_LLENO")
+        st.rerun()
+
+with b4:
+
+    if st.button("⬇️ Vaciar"):
+
+        enviar_comando("BEBEDERO_VACIAR")
+        st.rerun()
 
 
-st.markdown("#### Ajustar distancia manualmente")
-
-st.caption(
-    "Mueve el control para simular una lectura del sensor. "
-    "10 cm representa el nivel máximo y 30 cm representa el bebedero vacío."
-)
-
-distancia_nueva = st.slider(
-    "Distancia simulada del sensor (cm)",
-    min_value=10.0,
-    max_value=30.0,
-    step=0.5,
-    key="distancia_control"
-)
-
-if distancia_nueva != calcular_distancia(
-    st.session_state.nivel_agua
-):
-    st.session_state.nivel_agua = calcular_nivel(
-        distancia_nueva
-    )
-
-    st.session_state.valvula_abierta = False
-    st.session_state.vaciando = False
-
-    st.rerun()
-
+# =========================================================
+# 15. CONTROL POR ESCRITURA
+# =========================================================
 
 st.divider()
 
+st.markdown("### 💬 Habla con GranjaConecta")
 
-# =========================================================
-# 10. ASISTENTE DE TEXTO
-# =========================================================
+with st.form("formulario_orden", clear_on_submit=True):
 
-st.markdown("### 💬 Interactúa con GranjaConecta")
-
-st.write(
-    "Escribe una orden o pregunta sobre el bebedero."
-)
-
-with st.form("formulario_mensaje", clear_on_submit=True):
-
-    mensaje = st.text_input(
-        "Tu mensaje",
-        placeholder="Ejemplo: abre la válvula"
+    texto = st.text_input(
+        "Escribe tu orden",
+        placeholder="Ejemplo: llena el bebedero"
     )
 
     enviar = st.form_submit_button(
-        "Enviar mensaje",
+        "Enviar orden",
         use_container_width=True
     )
 
-if enviar and mensaje.strip():
+if enviar and texto.strip():
 
-    respuesta = procesar_mensaje(mensaje)
-
-    st.session_state.historial.append({
-        "usuario": mensaje,
-        "asistente": respuesta
-    })
-
-    st.session_state.respuesta = respuesta
-
+    procesar_orden(texto)
     st.rerun()
 
 
 # =========================================================
-# 11. MICRÓFONO OPCIONAL
+# 16. CONTROL POR VOZ
 # =========================================================
 
 if MICROFONO_DISPONIBLE:
 
-    st.markdown("#### 🎙️ Dar una orden por voz")
+    st.markdown("#### 🎙️ Control por voz")
 
     audio = mic_recorder(
         start_prompt="🎙️ Hablar",
         stop_prompt="⏹️ Detener",
         just_once=True,
-        key="microfono_bebedero"
+        key="microfono_granjaconecta"
     )
 
     if audio and audio.get("bytes"):
 
-        huella = hashlib.md5(
-            audio["bytes"]
-        ).hexdigest()
+        try:
 
-        if st.session_state.get("ultimo_audio") != huella:
+            import hashlib
 
-            st.session_state.ultimo_audio = huella
+            huella = hashlib.md5(
+                audio["bytes"]
+            ).hexdigest()
 
-            try:
-                import io
+            if st.session_state.ultimo_audio != huella:
+
+                st.session_state.ultimo_audio = huella
 
                 reconocedor = sr.Recognizer()
 
@@ -806,47 +1051,45 @@ if MICROFONO_DISPONIBLE:
                     language="es-CO"
                 )
 
-                respuesta = procesar_mensaje(texto_voz)
+                st.info(
+                    f"Has dicho: {texto_voz}"
+                )
 
-                st.session_state.historial.append({
-                    "usuario": texto_voz,
-                    "asistente": respuesta
-                })
-
-                st.session_state.respuesta = respuesta
+                procesar_orden(texto_voz)
 
                 st.rerun()
 
-            except sr.UnknownValueError:
-                st.warning(
-                    "No pude entender el audio. "
-                    "Intenta hablar un poco más claro."
-                )
+        except sr.UnknownValueError:
 
-            except sr.RequestError:
-                st.error(
-                    "No se pudo realizar el reconocimiento de voz. "
-                    "Comprueba tu conexión a internet."
-                )
+            st.warning(
+                "No pude reconocer tu voz. Intenta nuevamente."
+            )
 
-            except Exception as error:
-                st.error(
-                    f"No se pudo procesar el audio: {error}"
-                )
+        except sr.RequestError:
+
+            st.error(
+                "No se pudo conectar al servicio de reconocimiento de voz."
+            )
+
+        except Exception as error:
+
+            st.error(
+                f"Error procesando el audio: {error}"
+            )
 
 else:
 
-    st.info(
-        "El micrófono no está habilitado en este entorno. "
-        "Puedes probar todas las funciones con texto y botones."
+    st.warning(
+        "Para activar el micrófono instala "
+        "streamlit-mic-recorder y SpeechRecognition."
     )
 
 
 # =========================================================
-# 12. RESPUESTA DEL ASISTENTE
+# 17. RESPUESTA ESCRITA
 # =========================================================
 
-st.markdown("#### 🤖 Respuesta de GranjaConecta")
+st.markdown("### 🤖 Respuesta de GranjaConecta")
 
 st.markdown(
     f"""
@@ -863,17 +1106,24 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+if st.session_state.ultimo_mensaje_esp:
+
+    st.caption(
+        "Última confirmación recibida del ESP32: "
+        + st.session_state.ultimo_mensaje_esp
+    )
+
 
 # =========================================================
-# 13. HISTORIAL
+# 18. HISTORIAL
 # =========================================================
 
-st.markdown("### 📝 Historial de conversación")
+st.markdown("### 📝 Historial")
 
 if st.session_state.historial:
 
     for elemento in reversed(
-        st.session_state.historial
+        st.session_state.historial[-15:]
     ):
 
         st.markdown(
@@ -888,40 +1138,4 @@ if st.session_state.historial:
 
 else:
 
-    st.caption(
-        "Todavía no hay mensajes. Prueba escribiendo una orden."
-    )
-
-
-if st.button(
-    "🗑️ Limpiar conversación",
-    key="limpiar_historial"
-):
-    st.session_state.historial = []
-    st.session_state.respuesta = (
-        "Conversación limpiada. ¿En qué puedo ayudarte?"
-    )
-    st.rerun()
-
-
-# =========================================================
-# 14. INFORMACIÓN DE PRUEBA
-# =========================================================
-
-with st.expander("ℹ️ Información sobre esta simulación"):
-
-    st.write("""
-    **Cómo funciona la demostración:**
-
-    - 30 cm: bebedero vacío.
-    - Más de 25 cm: nivel bajo.
-    - Más de 10 cm y hasta 25 cm: nivel normal.
-    - 10 cm: bebedero lleno.
-    - Menos de 10 cm: posible desbordamiento.
-
-    La altura del agua en el dibujo se calcula a partir
-    de la distancia simulada.
-
-    Los botones modifican los datos locales de Streamlit.
-    Todavía no envían órdenes a ningún dispositivo físico.
-    """)
+    st.caption("Todavía no hay órdenes registradas.")
