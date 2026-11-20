@@ -1,4 +1,4 @@
-ok y en git hub import streamlit as st
+import streamlit as st
 import streamlit.components.v1 as components
 import paho.mqtt.client as mqtt
 import json
