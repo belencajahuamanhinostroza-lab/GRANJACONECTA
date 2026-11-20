@@ -136,6 +136,15 @@ st.markdown(
         padding-bottom: 10px;
     }
 
+    /* ÚNICO CAMBIO: COLOR VERDE OSCURO EN TEMPERATURA Y HUMEDAD */
+    [data-testid="stMetric"] label,
+    [data-testid="stMetric"] [data-testid="stMetricLabel"],
+    [data-testid="stMetric"] [data-testid="stMetricValue"],
+    [data-testid="stMetric"] [data-testid="stMetricDelta"],
+    [data-testid="stMetric"] p {
+        color: #17452e !important;
+    }
+
     @media (max-width: 700px) {
         .block-container {
             padding-left: 1rem;
