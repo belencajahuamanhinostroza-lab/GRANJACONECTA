@@ -6,6 +6,7 @@ import io
 import re
 import unicodedata
 import queue
+import uuid
 
 import speech_recognition as sr
 from streamlit_mic_recorder import mic_recorder
@@ -176,24 +177,33 @@ def iniciar_mqtt():
 
     mensajes = queue.Queue()
 
+    # ID único para evitar que otra sesión desconecte este cliente
+    client_id = "GRANJACONECTA_BEBEDERO_" + uuid.uuid4().hex[:10]
+
     cliente = mqtt.Client(
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-        client_id="GRANJACONECTA_BEBEDERO_STREAMLIT"
+        client_id=client_id,
+        protocol=mqtt.MQTTv311
     )
 
-    def al_conectar(
-        client,
-        userdata,
-        flags,
-        reason_code,
-        properties
-    ):
-        conectado = reason_code == 0
+    def al_conectar(client, userdata, flags, reason_code, properties):
+
+        try:
+            conectado = int(reason_code) == 0
+        except (TypeError, ValueError):
+            conectado = str(reason_code).lower() in ("success", "0")
 
         mensajes.put(("conexion", conectado, None))
 
         if conectado:
-            client.subscribe(TOPICO)
+            resultado, mid = client.subscribe(TOPICO, qos=0)
+
+            if resultado == mqtt.MQTT_ERR_SUCCESS:
+                mensajes.put(("info", "Suscripción al tópico realizada: " + TOPICO, None))
+            else:
+                mensajes.put(("error", "Conectó al broker, pero no pudo suscribirse al tópico.", None))
+        else:
+            mensajes.put(("error", "El broker rechazó la conexión MQTT: " + str(reason_code), None))
 
     def al_desconectar(
         client,
@@ -205,20 +215,26 @@ def iniciar_mqtt():
         mensajes.put(("conexion", False, None))
 
     def al_recibir(client, userdata, msg):
+
         try:
             contenido = msg.payload.decode("utf-8")
             datos = json.loads(contenido)
-
             mensajes.put(("mensaje", datos, None))
 
         except Exception as error:
-            mensajes.put(("error", str(error), None))
+            mensajes.put(("error", "Mensaje MQTT no válido: " + str(error), None))
+
+    def al_fallar_conexion(client, userdata):
+        mensajes.put(("error", "No se pudo establecer conexión con el servidor MQTT.", None))
 
     cliente.on_connect = al_conectar
     cliente.on_disconnect = al_desconectar
     cliente.on_message = al_recibir
+    cliente.on_connect_fail = al_fallar_conexion
 
     try:
+        cliente.reconnect_delay_set(min_delay=1, max_delay=10)
+
         cliente.connect_async(
             BROKER,
             PUERTO,
@@ -228,14 +244,12 @@ def iniciar_mqtt():
         cliente.loop_start()
 
     except Exception as error:
-        mensajes.put(("conexion", False, str(error)))
+        mensajes.put(("error", "Error al iniciar MQTT: " + str(error), None))
 
     return cliente, mensajes
 
 
 cliente_mqtt, cola_mqtt = iniciar_mqtt()
-
-
 # =========================================================
 # 6. LEER MENSAJES MQTT
 # =========================================================
@@ -251,7 +265,6 @@ while not cola_mqtt.empty():
     elif tipo == "mensaje":
 
         datos_mqtt = contenido
-
         tipo_mensaje = datos_mqtt.get("tipo", "")
 
         if tipo_mensaje == "telemetria":
@@ -314,17 +327,20 @@ while not cola_mqtt.empty():
             "Error MQTT: " + str(contenido)
         )
 
-
+# El estado real del cliente es la referencia principal.
+st.session_state.mqtt_conectado = cliente_mqtt.is_connected()
 # =========================================================
 # 7. ENVIAR COMANDOS AL ESP32
 # =========================================================
 
 def enviar_comando(comando):
 
-    if not st.session_state.mqtt_conectado:
+    # No depender de una variable de sesión que puede estar desactualizada.
+    if not cliente_mqtt.is_connected():
+        st.session_state.mqtt_conectado = False
         return False, (
-            "No puedo enviar la orden porque no hay conexión MQTT "
-            "con el ESP32."
+            "El cliente MQTT todavía no está conectado. "
+            "Espera unos segundos e inténtalo nuevamente."
         )
 
     mensaje = {
@@ -335,18 +351,16 @@ def enviar_comando(comando):
     try:
         resultado = cliente_mqtt.publish(
             TOPICO,
-            json.dumps(mensaje),
+            json.dumps(mensaje, ensure_ascii=False),
             qos=0
         )
 
         if resultado.rc == mqtt.MQTT_ERR_SUCCESS:
+            return True, "Orden enviada al tópico MQTT: " + comando
 
-            return True, "Orden enviada al ESP32: " + comando
-
-        return False, "No se pudo publicar la orden MQTT."
+        return False, "No se pudo publicar la orden MQTT. Código: " + str(resultado.rc)
 
     except Exception as error:
-
         return False, "Error al enviar la orden: " + str(error)
 
 
@@ -559,17 +573,21 @@ st.markdown(
 # 11. ESTADO DE CONEXIÓN
 # =========================================================
 
-if st.session_state.mqtt_conectado:
+# Consultar directamente el cliente MQTT en cada actualización de Streamlit.
+mqtt_activo = cliente_mqtt.is_connected()
+st.session_state.mqtt_conectado = mqtt_activo
+
+if mqtt_activo:
 
     st.markdown(
-        '<p class="estado-ok">🟢 Conectado al ESP32 mediante MQTT</p>',
+        '<p class="estado-ok">🟢 Conectado al servidor MQTT</p>',
         unsafe_allow_html=True
     )
 
 else:
 
     st.markdown(
-        '<p class="estado-error">🔴 Esperando conexión con el ESP32...</p>',
+        '<p class="estado-error">🟠 Conectando al servidor MQTT...</p>',
         unsafe_allow_html=True
     )
 
