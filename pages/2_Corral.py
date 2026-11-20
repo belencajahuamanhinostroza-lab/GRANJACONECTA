@@ -50,133 +50,193 @@ CONFIANZA_MINIMA = 80.0
 # 2. ESTILO VISUAL
 # =====================================================
 
-st.markdown(
-    """
-    <style>
-    .stApp, [data-testid="stAppViewContainer"],
-    [data-testid="stMain"] {
-        background: #edf5e9 !important;
-    }
+st.markdown("""
+<style>
+.stApp, [data-testid="stAppViewContainer"],
+[data-testid="stMain"] {
+    background: #edf5e9 !important;
+}
 
-    [data-testid="stHeader"] {
-        background: #edf5e9 !important;
-    }
+[data-testid="stHeader"] {
+    background: #edf5e9 !important;
+}
 
-    [data-testid="stMainBlockContainer"] {
-        background: transparent !important;
-        padding-top: 1.4rem;
-    }
+[data-testid="stMainBlockContainer"] {
+    background: transparent !important;
+    padding-top: 1.4rem;
+}
 
-    h1, h2, h3, h4, h5, h6,
-    [data-testid="stMarkdownContainer"] h1,
-    [data-testid="stMarkdownContainer"] h2,
-    [data-testid="stMarkdownContainer"] h3,
-    [data-testid="stMarkdownContainer"] h4 {
-        color: #17472d !important;
-    }
+h1, h2, h3, h4, h5, h6,
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3,
+[data-testid="stMarkdownContainer"] h4 {
+    color: #17472d !important;
+}
 
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg,#123d2b,#245c36);
-    }
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg,#123d2b,#245c36);
+}
 
-    [data-testid="stSidebar"] * {
-        color: #ffffff !important;
-    }
+[data-testid="stSidebar"] * {
+    color: #ffffff !important;
+}
 
-    h1, h2, h3, h4, p, label, .stMarkdown {
-        color: #245c36;
-    }
+h1, h2, h3, h4, p, label, .stMarkdown {
+    color: #245c36;
+}
 
-    [data-testid="stMetric"] {
-        background: #ffffff;
-        border: 1px solid #c9dfc4;
-        border-radius: 14px;
-        padding: 12px;
-    }
+[data-testid="stMetric"] {
+    background: #ffffff;
+    border: 1px solid #c9dfc4;
+    border-radius: 14px;
+    padding: 12px;
+}
 
-    div.stButton > button {
-        background: #c6f36a;
-        color: #17452c;
-        border: 1px solid #a8d64d;
-        border-radius: 11px;
-        font-weight: 700;
-        min-height: 43px;
-    }
+div.stButton > button {
+    background: #c6f36a;
+    color: #17452c;
+    border: 1px solid #a8d64d;
+    border-radius: 11px;
+    font-weight: 700;
+    min-height: 43px;
+}
 
-    div.stButton > button:hover {
-        background: #b4e653;
-        color: #123d2b;
-        border-color: #83b833;
-    }
+div.stButton > button:hover {
+    background: #b4e653;
+    color: #123d2b;
+    border-color: #83b833;
+}
 
-    [data-testid="stCameraInput"] {
-        background: #ffffff;
-        border: 1px solid #c9dfc4;
-        border-radius: 12px;
-        padding: 8px;
-    }
+[data-testid="stCameraInput"] {
+    background: #ffffff;
+    border: 1px solid #c9dfc4;
+    border-radius: 12px;
+    padding: 8px;
+}
 
-    .alerta-roja {
-        background: #fff0ed;
-        border: 1px solid #e99a8d;
-        border-left: 4px solid #d93636;
-        border-radius: 8px;
-        padding: 6px 10px;
-        margin: 4px 0;
-        color: #7a211b;
-        font-size: 0.82rem;
-        line-height: 1.25;
-    }
+.alerta-roja {
+    background: #fff0ed;
+    border: 1px solid #e99a8d;
+    border-left: 4px solid #d93636;
+    border-radius: 8px;
+    padding: 8px 11px;
+    margin: 5px 0;
+    color: #7a211b;
+    font-size: 0.84rem;
+}
 
-    .alerta-verde {
-        background: #eaf7eb;
-        border: 1px solid #a9d7ac;
-        border-left: 4px solid #29965a;
-        border-radius: 8px;
-        padding: 6px 10px;
-        margin: 4px 0;
-        color: #245c36;
-        font-size: 0.82rem;
-        line-height: 1.25;
-    }
+.alerta-verde {
+    background: #eaf7eb;
+    border: 1px solid #a9d7ac;
+    border-left: 4px solid #29965a;
+    border-radius: 8px;
+    padding: 8px 11px;
+    margin: 5px 0;
+    color: #245c36;
+    font-size: 0.84rem;
+}
 
-    .gesto-card {
-        background: #ffffff;
-        border: 1px solid #c9dfc4;
-        border-radius: 10px;
-        padding: 8px 10px;
-        margin: 5px 0;
-        color: #17472d;
-        min-height: 66px;
-    }
+.gesto-card {
+    background: #ffffff;
+    border: 1px solid #c9dfc4;
+    border-radius: 10px;
+    padding: 8px 10px;
+    margin: 5px 0;
+    color: #17472d;
+    min-height: 66px;
+}
 
-    .gesto-emoji {
-        font-size: 1.65rem;
-        line-height: 1.1;
-        margin-bottom: 4px;
-    }
+.gesto-emoji {
+    font-size: 1.65rem;
+    line-height: 1.1;
+    margin-bottom: 4px;
+}
 
-    .cambio-confirmado {
-        background: #e7f5e8;
-        border: 1px solid #9bcda2;
-        border-left: 5px solid #29965a;
-        border-radius: 10px;
-        padding: 10px 12px;
-        margin: 8px 0;
-        color: #17472d;
-    }
+.cambio-confirmado {
+    background: #e7f5e8;
+    border: 1px solid #9bcda2;
+    border-left: 5px solid #29965a;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin: 8px 0;
+    color: #17472d;
+}
 
-    .accion-detectada {
-        background: #eaf7eb;
-        border: 1px solid #a9d7ac;
-        border-radius: 14px;
-        padding: 15px;
-        color: #245c36;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+.accion-detectada {
+    background: #eaf7eb;
+    border: 1px solid #a9d7ac;
+    border-radius: 14px;
+    padding: 15px;
+    color: #245c36;
+}
+
+.medicion-card {
+    background: #ffffff;
+    border: 1px solid #c9dfc4;
+    border-radius: 16px;
+    padding: 17px;
+    min-height: 145px;
+    box-shadow: 0 3px 12px rgba(20,60,35,.07);
+    margin-bottom: 12px;
+}
+
+.medicion-titulo {
+    color: #17472d;
+    font-size: 14px;
+    font-weight: 800;
+    margin-bottom: 9px;
+}
+
+.medicion-valor {
+    color: #17472d;
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.medicion-unidad {
+    font-size: 15px;
+    color: #65816c;
+    font-weight: 600;
+}
+
+.estado-medicion {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 800;
+    margin-top: 9px;
+}
+
+.estado-baja {
+    background: #ffe3e3;
+    color: #bd2424;
+}
+
+.estado-normal {
+    background: #dcf5df;
+    color: #19743a;
+}
+
+.estado-alta {
+    background: #fff0c7;
+    color: #a66a00;
+}
+
+.estado-sin-dato {
+    background: #eeeeee;
+    color: #666666;
+}
+
+.mensaje-medicion {
+    color: #607467;
+    font-size: 12px;
+    margin-top: 7px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # =====================================================
 # 3. ESTADO DE LA PÁGINA
@@ -202,7 +262,153 @@ for k, v in INICIALES.items():
         st.session_state[k] = v
 
 # =====================================================
-# 4. MQTT - CLIENTE Y RECONEXIÓN
+# 4. FUNCIONES DE MEDICIÓN
+# =====================================================
+
+def convertir_lectura(valor):
+    if valor is None:
+        return None
+
+    coincidencia = re.search(
+        r"-?\d+(?:[.,]\d+)?",
+        str(valor),
+    )
+
+    if not coincidencia:
+        return None
+
+    try:
+        return float(
+            coincidencia.group(0).replace(",", ".")
+        )
+    except ValueError:
+        return None
+
+
+def obtener_estado_medicion(valor):
+    """
+    Menor de 20: BAJA
+    Desde 20 hasta menos de 35: NORMAL
+    Desde 35: ALTA
+    """
+
+    if valor is None:
+        return (
+            "SIN LECTURA",
+            "sin-dato",
+            "Esperando datos del sensor",
+        )
+
+    if valor < 20:
+        return (
+            "BAJA",
+            "baja",
+            "Valor por debajo del rango normal",
+        )
+
+    if valor < 35:
+        return (
+            "NORMAL",
+            "normal",
+            "Medición dentro del rango normal",
+        )
+
+    return (
+        "ALTA",
+        "alta",
+        "Valor por encima del rango normal",
+    )
+
+
+def mostrar_mediciones(temperatura, humedad):
+    """
+    Las tarjetas muestran exclusivamente los valores
+    recibidos en la telemetría MQTT del ESP32.
+    """
+
+    estado_temp, clase_temp, mensaje_temp = (
+        obtener_estado_medicion(temperatura)
+    )
+
+    estado_hum, clase_hum, mensaje_hum = (
+        obtener_estado_medicion(humedad)
+    )
+
+    columnas = st.columns(2)
+
+    with columnas[0]:
+        valor_temp = (
+            f"{temperatura:.1f}"
+            if temperatura is not None
+            else "--"
+        )
+
+        st.markdown(f"""
+        <div class="medicion-card">
+            <div class="medicion-titulo">
+                🌡️ TEMPERATURA DEL CORRAL
+            </div>
+            <div class="medicion-valor">
+                {valor_temp}<span class="medicion-unidad"> °C</span>
+            </div>
+            <span class="estado-medicion estado-{clase_temp}">
+                {estado_temp}
+            </span>
+            <div class="mensaje-medicion">{mensaje_temp}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with columnas[1]:
+        valor_hum = (
+            f"{humedad:.1f}"
+            if humedad is not None
+            else "--"
+        )
+
+        st.markdown(f"""
+        <div class="medicion-card">
+            <div class="medicion-titulo">
+                💧 HUMEDAD DEL CORRAL
+            </div>
+            <div class="medicion-valor">
+                {valor_hum}<span class="medicion-unidad"> %</span>
+            </div>
+            <span class="estado-medicion estado-{clase_hum}">
+                {estado_hum}
+            </span>
+            <div class="mensaje-medicion">{mensaje_hum}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Alertas de temperatura
+    if temperatura is not None:
+        if temperatura < 20:
+            st.error(
+                f"🥶 ADVERTENCIA: temperatura baja "
+                f"({temperatura:.1f} °C). Hace frío en el corral."
+            )
+        elif temperatura >= 35:
+            st.error(
+                f"🔥 ALARMA: temperatura alta "
+                f"({temperatura:.1f} °C)."
+            )
+
+    # Alertas de humedad
+    if humedad is not None:
+        if humedad < 20:
+            st.warning(
+                f"💧 ADVERTENCIA: humedad baja "
+                f"({humedad:.1f} %)."
+            )
+        elif humedad >= 35:
+            st.error(
+                f"🚨 ALARMA: humedad alta "
+                f"({humedad:.1f} %)."
+            )
+
+
+# =====================================================
+# 5. MQTT - CLIENTE Y RECONEXIÓN
 # =====================================================
 
 @st.cache_resource
@@ -214,7 +420,6 @@ def crear_cliente_mqtt():
         return None, cola, "Falta instalar paho-mqtt."
 
     try:
-
         cliente_id = "GranjaCorral_" + uuid.uuid4().hex[:10]
 
         cliente = mqtt.Client(
@@ -229,10 +434,6 @@ def crear_cliente_mqtt():
             max_delay=15,
         )
 
-        # ---------------------------------------------
-        # CONEXIÓN EXITOSA
-        # ---------------------------------------------
-
         def al_conectar(
             client,
             userdata,
@@ -240,7 +441,6 @@ def crear_cliente_mqtt():
             reason_code,
             properties,
         ):
-
             codigo = getattr(reason_code, "value", reason_code)
 
             try:
@@ -249,7 +449,6 @@ def crear_cliente_mqtt():
                 codigo = -1
 
             if codigo == 0:
-
                 cola.put(("conexion", "conectado"))
 
                 resultado, mid = client.subscribe(
@@ -257,24 +456,16 @@ def crear_cliente_mqtt():
                     qos=0,
                 )
 
-                if resultado == mqtt.MQTT_ERR_SUCCESS:
-                    cola.put(("info", "Suscripción MQTT solicitada correctamente."))
-                else:
+                if resultado != mqtt.MQTT_ERR_SUCCESS:
                     cola.put((
                         "error",
                         f"No se pudo solicitar la suscripción. Código: {resultado}",
                     ))
-
             else:
-
                 cola.put((
                     "error",
                     f"El broker rechazó la conexión. Código: {codigo}",
                 ))
-
-        # ---------------------------------------------
-        # DESCONEXIÓN
-        # ---------------------------------------------
 
         def al_desconectar(
             client,
@@ -283,31 +474,19 @@ def crear_cliente_mqtt():
             reason_code,
             properties,
         ):
-
             cola.put((
                 "conexion",
                 f"desconectado: {reason_code}",
             ))
 
-        # ---------------------------------------------
-        # ERROR AL INTENTAR CONECTAR
-        # ---------------------------------------------
-
         def al_fallar_conexion(client, userdata):
-
             cola.put((
                 "error",
                 "No se pudo establecer la conexión con el broker MQTT.",
             ))
 
-        # ---------------------------------------------
-        # MENSAJES RECIBIDOS
-        # ---------------------------------------------
-
         def al_recibir(client, userdata, mensaje):
-
             try:
-
                 contenido = mensaje.payload.decode(
                     "utf-8",
                     errors="replace",
@@ -317,34 +496,10 @@ def crear_cliente_mqtt():
                     mensaje.topic,
                     contenido,
                 ))
-
             except Exception as exc:
-
                 cola.put(("error", str(exc)))
 
-        # ---------------------------------------------
-        # SUSCRIPCIÓN
-        # ---------------------------------------------
-
-        def al_suscribirse(
-            client,
-            userdata,
-            mid,
-            reason_code_list,
-            properties,
-        ):
-
-            cola.put((
-                "info",
-                f"Respuesta de suscripción recibida: {reason_code_list}",
-            ))
-
-        # ---------------------------------------------
-        # REGISTRO DE ERRORES DEL CLIENTE
-        # ---------------------------------------------
-
         def al_log(client, userdata, level, buf):
-
             if level >= mqtt.MQTT_LOG_ERR:
                 cola.put(("error", str(buf)))
 
@@ -352,10 +507,8 @@ def crear_cliente_mqtt():
         cliente.on_disconnect = al_desconectar
         cliente.on_connect_fail = al_fallar_conexion
         cliente.on_message = al_recibir
-        cliente.on_subscribe = al_suscribirse
         cliente.on_log = al_log
 
-        # Conexión asíncrona para no bloquear Streamlit.
         cliente.connect_async(
             BROKER,
             PUERTO,
@@ -367,7 +520,6 @@ def crear_cliente_mqtt():
         return cliente, cola, None
 
     except Exception as exc:
-
         return None, cola, str(exc)
 
 
@@ -375,27 +527,23 @@ cliente_mqtt, cola_mqtt, error_conexion = crear_cliente_mqtt()
 
 
 # =====================================================
-# 5. ENVÍO DE COMANDOS MQTT
+# 6. ENVÍO DE COMANDOS MQTT
 # =====================================================
 
 def enviar_comando(comando):
 
     if cliente_mqtt is None:
-
         st.error(
             "No se creó el cliente MQTT. "
             + str(error_conexion or "")
         )
-
         return False
 
     if not cliente_mqtt.is_connected():
-
         st.error(
             "Streamlit todavía no está conectado al broker MQTT. "
             "Espera unos segundos y vuelve a intentarlo."
         )
-
         return False
 
     mensaje = {
@@ -405,7 +553,6 @@ def enviar_comando(comando):
     }
 
     try:
-
         resultado = cliente_mqtt.publish(
             TOPICO_UNICO,
             payload=json.dumps(
@@ -417,12 +564,10 @@ def enviar_comando(comando):
         )
 
         if resultado.rc != mqtt.MQTT_ERR_SUCCESS:
-
             st.error(
                 f"No se pudo publicar el comando. "
                 f"Código MQTT: {resultado.rc}"
             )
-
             return False
 
         st.session_state.ultimo_comando = comando
@@ -431,34 +576,24 @@ def enviar_comando(comando):
         return True
 
     except Exception as exc:
-
         st.error(f"Error al enviar el comando MQTT: {exc}")
-
         return False
 
 
 # =====================================================
-# 6. PROCESAR MENSAJES MQTT
+# 7. PROCESAR MENSAJES MQTT
 # =====================================================
 
 def procesar_mensajes_mqtt():
 
     while True:
-
         try:
             topic, contenido = cola_mqtt.get_nowait()
-
         except queue.Empty:
             break
 
-        # ---------------------------------------------
-        # ESTADO DE CONEXIÓN
-        # ---------------------------------------------
-
         if topic == "conexion":
-
             conectado = contenido == "conectado"
-
             st.session_state.mqtt_conectado = conectado
 
             if conectado:
@@ -468,35 +603,15 @@ def procesar_mensajes_mqtt():
 
             continue
 
-        # ---------------------------------------------
-        # ERRORES
-        # ---------------------------------------------
-
         if topic == "error":
-
             st.session_state.ultimo_error_mqtt = contenido
-
             continue
-
-        # ---------------------------------------------
-        # INFORMACIÓN
-        # ---------------------------------------------
-
-        if topic == "info":
-
-            continue
-
-        # ---------------------------------------------
-        # MENSAJES DEL TÓPICO
-        # ---------------------------------------------
 
         if topic != TOPICO_UNICO:
             continue
 
         try:
-
             paquete = json.loads(contenido)
-
         except (json.JSONDecodeError, TypeError):
             continue
 
@@ -504,12 +619,11 @@ def procesar_mensajes_mqtt():
             continue
 
         st.session_state.ultimo_paquete = paquete
-
         tipo = paquete.get("tipo")
 
-        # =============================================
-        # TELEMETRÍA
-        # =============================================
+        # -------------------------------------------------
+        # TELEMETRÍA DEL ESP32
+        # -------------------------------------------------
 
         if tipo == "telemetria":
 
@@ -519,83 +633,84 @@ def procesar_mensajes_mqtt():
 
                 st.session_state.telemetria_corral.update(datos)
 
-                comando_confirmado = (
-                    st.session_state.comando_pendiente
-                )
+                comando = st.session_state.comando_pendiente
 
-                if comando_confirmado:
+                if comando:
 
-                    if comando_confirmado == "PUERTA_ABRIR":
+                    temp = convertir_lectura(
+                        datos.get("temperatura")
+                    )
 
-                        st.session_state.ultimo_cambio_confirmado = (
-                            "La puerta del corral quedó ABIERTA."
-                        )
+                    hum = convertir_lectura(
+                        datos.get("humedad")
+                    )
 
-                    elif comando_confirmado == "PUERTA_CERRAR":
+                    if comando == "PUERTA_ABRIR":
+                        mensaje = "La puerta del corral quedó ABIERTA."
 
-                        st.session_state.ultimo_cambio_confirmado = (
-                            "La puerta del corral quedó CERRADA."
-                        )
+                    elif comando == "PUERTA_CERRAR":
+                        mensaje = "La puerta del corral quedó CERRADA."
 
-                    elif comando_confirmado in (
+                    elif comando in (
                         "VENTILACION_SUBIR",
                         "VENTILACION_BAJAR",
                     ):
+                        valor = datos.get("ventilacion", "sin dato")
+                        mensaje = f"Ventilación actualizada: {valor}%."
 
-                        valor = datos.get(
-                            "ventilacion",
-                            "sin dato",
-                        )
-
-                        st.session_state.ultimo_cambio_confirmado = (
-                            f"La ventilación se actualizó a {valor}%."
-                        )
-
-                    elif comando_confirmado in (
+                    elif comando in (
                         "AJUSTE_TERMICO_SUBIR",
                         "AJUSTE_TERMICO_BAJAR",
                     ):
+                        if temp is not None:
+                            mensaje = (
+                                f"Temperatura recibida del ESP32: "
+                                f"{temp:.1f} °C."
+                            )
+                        else:
+                            valor = datos.get("ajusteTermico", "sin dato")
+                            mensaje = (
+                                f"Ajuste térmico actualizado: {valor}%. "
+                                "Esperando la nueva medición de temperatura."
+                            )
 
-                        valor = datos.get(
-                            "ajusteTermico",
-                            datos.get("ajuste_termico", "sin dato"),
-                        )
-
-                        st.session_state.ultimo_cambio_confirmado = (
-                            f"El ajuste térmico simulado quedó en {valor}%."
-                        )
-
-                    elif comando_confirmado in (
+                    elif comando in (
                         "HUMEDAD_SUBIR",
                         "HUMEDAD_BAJAR",
                     ):
+                        if hum is not None:
+                            mensaje = (
+                                f"Humedad recibida del ESP32: "
+                                f"{hum:.1f}%."
+                            )
+                        else:
+                            valor = datos.get("humedadVisual", "sin dato")
+                            mensaje = (
+                                f"Ajuste de humedad actualizado: {valor}%. "
+                                "Esperando la nueva medición de humedad."
+                            )
 
-                        valor = datos.get(
-                            "humedadVisual",
-                            datos.get("ajusteHumedad", "sin dato"),
-                        )
+                    elif comando == "VALVULA_ABRIR":
+                        mensaje = "La válvula del bebedero quedó ABIERTA."
 
-                        st.session_state.ultimo_cambio_confirmado = (
-                            f"El ajuste de humedad simulado quedó en {valor}%."
-                        )
+                    elif comando == "VALVULA_CERRAR":
+                        mensaje = "La válvula del bebedero quedó CERRADA."
 
-                    elif comando_confirmado == "VALVULA_ABRIR":
+                    elif comando == "BEBEDERO_VACIAR":
+                        mensaje = "Se recibió la orden de vaciado del bebedero."
 
-                        st.session_state.ultimo_cambio_confirmado = (
-                            "La válvula del bebedero quedó ABIERTA."
-                        )
+                    elif comando == "BEBEDERO_LLENO":
+                        mensaje = "Se recibió la orden de llenado del bebedero."
 
-                    elif comando_confirmado == "VALVULA_CERRAR":
+                    else:
+                        mensaje = f"Se recibió actualización para {comando}."
 
-                        st.session_state.ultimo_cambio_confirmado = (
-                            "La válvula del bebedero quedó CERRADA."
-                        )
-
+                    st.session_state.ultimo_cambio_confirmado = mensaje
                     st.session_state.comando_pendiente = ""
 
-        # =============================================
+        # -------------------------------------------------
         # RESPUESTAS DEL ESP32
-        # =============================================
+        # -------------------------------------------------
 
         elif tipo == "respuesta":
 
@@ -623,37 +738,30 @@ def procesar_mensajes_mqtt():
 
 
 # =====================================================
-# 7. DIAGNÓSTICO DE CONEXIÓN MQTT
+# 8. DIAGNÓSTICO MQTT
 # =====================================================
 
 def comprobar_conexion_tcp():
 
     try:
-
         conexion = socket.create_connection(
             (BROKER, PUERTO),
             timeout=8,
         )
-
         conexion.close()
 
         return True, "Conexión TCP exitosa con el broker."
 
     except socket.timeout:
-
         return False, (
             "Tiempo de espera agotado. "
             "Streamlit no recibió respuesta del puerto 1883."
         )
 
     except ConnectionRefusedError:
-
-        return False, (
-            "El servidor rechazó la conexión TCP."
-        )
+        return False, "El servidor rechazó la conexión TCP."
 
     except OSError as exc:
-
         return False, str(exc)
 
 
@@ -669,17 +777,11 @@ def mostrar_diagnostico_mqtt():
     )
 
     if conectado_real:
-
         st.success(
             f"MQTT CONECTADO · {BROKER}:{PUERTO}"
         )
-
-        st.caption(
-            f"Tópico: {TOPICO_UNICO}"
-        )
-
+        st.caption(f"Tópico: {TOPICO_UNICO}")
     else:
-
         st.error("MQTT DESCONECTADO")
 
         if error_conexion:
@@ -694,14 +796,11 @@ def mostrar_diagnostico_mqtt():
     col1, col2 = st.columns(2)
 
     with col1:
-
         if st.button(
             "🧪 Probar conexión TCP",
             use_container_width=True,
         ):
-
-            with st.spinner("Comprobando conexión con el broker..."):
-
+            with st.spinner("Comprobando conexión..."):
                 correcto, detalle = comprobar_conexion_tcp()
 
             if correcto:
@@ -710,27 +809,21 @@ def mostrar_diagnostico_mqtt():
                 st.error(detalle)
 
     with col2:
-
         if st.button(
             "🔄 Reiniciar conexión MQTT",
             use_container_width=True,
         ):
-
             crear_cliente_mqtt.clear()
             st.rerun()
 
     st.caption(
-        "Servidor: "
-        + BROKER
-        + " | Puerto: "
-        + str(PUERTO)
-        + " | Tópico: "
-        + TOPICO_UNICO
+        f"Servidor: {BROKER} | Puerto: {PUERTO} | "
+        f"Tópico: {TOPICO_UNICO}"
     )
 
 
 # =====================================================
-# 8. MODELO TEACHABLE MACHINE
+# 9. MODELO TEACHABLE MACHINE
 # =====================================================
 
 @st.cache_resource
@@ -741,7 +834,6 @@ def cargar_modelo(ruta):
     archivo = Path(ruta)
 
     if not archivo.is_file():
-
         raise FileNotFoundError(
             f"No se encuentra {archivo.name}. "
             "Debe estar en la raíz del repositorio."
@@ -759,7 +851,6 @@ def cargar_etiquetas(ruta):
     archivo = Path(ruta)
 
     if not archivo.is_file():
-
         raise FileNotFoundError(
             "No se encuentra labels.txt en la raíz del repositorio."
         )
@@ -767,15 +858,11 @@ def cargar_etiquetas(ruta):
     etiquetas = []
 
     with archivo.open("r", encoding="utf-8") as f:
-
         for linea in f:
-
             linea = linea.strip()
 
             if linea:
-
                 partes = linea.split(maxsplit=1)
-
                 etiquetas.append(
                     partes[1] if len(partes) > 1 else partes[0]
                 )
@@ -809,7 +896,6 @@ def reconocer_gesto(foto, modelo):
     )[0]
 
     indice = int(np.argmax(prediccion))
-
     confianza = float(prediccion[indice]) * 100.0
 
     return indice, confianza
@@ -844,25 +930,25 @@ ACCIONES = {
         "nombre": "Subir ajuste térmico",
         "comando": "AJUSTE_TERMICO_SUBIR",
         "emoji": "✌️",
-        "detalle": "Aumenta 25 puntos el ajuste térmico simulado.",
+        "detalle": "Aumenta el ajuste térmico.",
     },
     5: {
         "nombre": "Bajar ajuste térmico",
         "comando": "AJUSTE_TERMICO_BAJAR",
         "emoji": "☝️",
-        "detalle": "Disminuye 25 puntos el ajuste térmico simulado.",
+        "detalle": "Disminuye el ajuste térmico.",
     },
     6: {
         "nombre": "Subir humedad",
         "comando": "HUMEDAD_SUBIR",
         "emoji": "👌",
-        "detalle": "Aumenta 25 puntos el ajuste de humedad simulado.",
+        "detalle": "Aumenta el ajuste de humedad.",
     },
     7: {
         "nombre": "Bajar humedad",
         "comando": "HUMEDAD_BAJAR",
         "emoji": "🤙",
-        "detalle": "Disminuye 25 puntos el ajuste de humedad simulado.",
+        "detalle": "Disminuye el ajuste de humedad.",
     },
 }
 
@@ -872,11 +958,9 @@ def ejecutar_gesto(indice, confianza):
     accion = ACCIONES.get(indice)
 
     if accion is None:
-
         st.warning(
             "La clase reconocida no tiene un comando configurado."
         )
-
         return
 
     if enviar_comando(accion["comando"]):
@@ -886,7 +970,6 @@ def ejecutar_gesto(indice, confianza):
         )
 
         st.session_state.ultima_accion = accion["nombre"]
-
         st.session_state.ultima_confianza = confianza
 
         st.success(
@@ -896,26 +979,22 @@ def ejecutar_gesto(indice, confianza):
 
 
 # =====================================================
-# 9. MENÚ LATERAL Y ENCABEZADO
+# 10. MENÚ LATERAL Y ENCABEZADO
 # =====================================================
 
 with st.sidebar:
 
-    st.markdown(
-        """
-        <div style="text-align:center;padding:18px 5px 22px;">
-          <div style="font-size:42px;">🌱</div>
-          <div style="font-size:23px;font-weight:800;">GranjaConecta</div>
-          <div style="font-size:11px;letter-spacing:2px;color:#c6f36a;">
-            TECNOLOGÍA PARA EL CAMPO
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown("""
+    <div style="text-align:center;padding:18px 5px 22px;">
+      <div style="font-size:42px;">🌱</div>
+      <div style="font-size:23px;font-weight:800;">GranjaConecta</div>
+      <div style="font-size:11px;letter-spacing:2px;color:#c6f36a;">
+        TECNOLOGÍA PARA EL CAMPO
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.markdown("---")
-
     st.subheader("Panel del corral")
 
     st.write("📷 Reconocimiento de gestos")
@@ -926,36 +1005,28 @@ with st.sidebar:
     st.write("📊 Monitoreo ambiental")
 
     with st.expander("📖 ¿Cómo utilizar la cámara?"):
+        st.markdown("""
+        1. Permite el acceso a la cámara.
+        2. Coloca la mano completa dentro del encuadre.
+        3. Busca buena iluminación.
+        4. Realiza uno de los gestos mostrados debajo de la cámara.
+        5. Mantén la postura y toma la fotografía.
+        6. Revisa el gesto reconocido y el último cambio.
+        7. Si la confianza es menor al 80 %, vuelve a intentarlo.
 
-        st.markdown(
-            """
-            1. Permite el acceso a la cámara.
-            2. Coloca la mano completa dentro del encuadre.
-            3. Busca buena iluminación y evita fondos muy cargados.
-            4. Realiza uno de los gestos mostrados debajo de la cámara.
-            5. Mantén la postura y toma la fotografía.
-            6. Revisa el gesto reconocido y el mensaje del último cambio.
-            7. Si la confianza es menor al 80 %, no se envía la orden:
-               vuelve a intentarlo.
+        **Gestos disponibles:**
 
-            **Gestos disponibles y su función:**
-
-            - ✋ Abrir puerta.
-            - ✊ Cerrar puerta.
-            - 👍 Aumentar ventilación.
-            - 👎 Disminuir ventilación.
-            - ✌️ Subir ajuste térmico.
-            - ☝️ Bajar ajuste térmico.
-            - 👌 Subir humedad.
-            - 🤙 Bajar humedad.
-
-            **Importante:** realiza exactamente estas señas, tal como fueron
-            utilizadas para entrenar las ocho clases en Teachable Machine.
-            """
-        )
+        - ✋ Abrir puerta.
+        - ✊ Cerrar puerta.
+        - 👍 Aumentar ventilación.
+        - 👎 Disminuir ventilación.
+        - ✌️ Subir ajuste térmico.
+        - ☝️ Bajar ajuste térmico.
+        - 👌 Subir humedad.
+        - 🤙 Bajar humedad.
+        """)
 
     st.markdown("---")
-
     st.caption("Prototipo académico ESP32 + Wokwi + MQTT")
 
 
@@ -967,75 +1038,41 @@ st.markdown(
 
 st.markdown(
     "<p style='color:#477b4e;font-size:16px'>"
-    "Controla el corral mediante gestos. Observa los cambios visuales "
-    "y los datos que devuelve el ESP32 simulado en Wokwi."
+    "Controla el corral mediante gestos. Observa los cambios "
+    "y las mediciones que devuelve el ESP32 en Wokwi."
     "</p>",
     unsafe_allow_html=True,
 )
 
 if ERROR_MQTT:
-
     st.error(
         "No está instalada la librería paho-mqtt. "
         "Agrégala a requirements.txt."
     )
-
     st.stop()
 
-# Mostrar diagnóstico de conexión
 mostrar_diagnostico_mqtt()
-
 st.divider()
 
 
 # =====================================================
-# 10. FUNCIONES DE REPRESENTACIÓN DEL CORRAL
+# 11. REPRESENTACIÓN DEL CORRAL
 # =====================================================
 
 def numero_porcentaje(valor, predeterminado=0):
 
     try:
-
         return max(
             0,
             min(100, int(float(valor))),
         )
-
     except (TypeError, ValueError):
-
         return predeterminado
-
-
-def convertir_lectura(valor):
-
-    if valor is None:
-        return None
-
-    coincidencia = re.search(
-        r"-?\d+(?:[.,]\d+)?",
-        str(valor),
-    )
-
-    if not coincidencia:
-        return None
-
-    try:
-
-        return float(
-            coincidencia.group(0).replace(",", ".")
-        )
-
-    except ValueError:
-
-        return None
 
 
 def construir_corral(puerta, ventilacion):
 
-    ventilacion = numero_porcentaje(
-        ventilacion,
-        0,
-    )
+    ventilacion = numero_porcentaje(ventilacion, 0)
 
     puerta_txt = str(puerta).strip().lower()
 
@@ -1048,16 +1085,10 @@ def construir_corral(puerta, ventilacion):
     )
 
     if puerta_abierta:
-
         estado_puerta = "ABIERTA"
         color_puerta = "#8ccf50"
-
-        movimiento_puerta = (
-            "translateX(-48px) rotateY(-25deg)"
-        )
-
+        movimiento_puerta = "translateX(-48px) rotateY(-25deg)"
     else:
-
         estado_puerta = (
             "CERRADA"
             if puerta_txt in (
@@ -1069,17 +1100,12 @@ def construir_corral(puerta, ventilacion):
             )
             else "SIN DATO"
         )
-
         color_puerta = "#a66a35"
         movimiento_puerta = "translateX(0) rotateY(0)"
 
     diametro = 18 + (ventilacion * 0.82)
-
     opacidad_aire = 0.12 + (ventilacion / 100) * 0.22
-
-    intensidad_ventilador = (
-        0.15 + (ventilacion / 100) * 0.85
-    )
+    intensidad_ventilador = 0.15 + (ventilacion / 100) * 0.85
 
     html = f"""
     <div style="
@@ -1100,59 +1126,41 @@ def construir_corral(puerta, ventilacion):
     ">
 
       <div style="
-        position:absolute;
-        top:0;left:0;
-        width:100%;height:42px;
-        background:#754523;
+        position:absolute;top:0;left:0;
+        width:100%;height:42px;background:#754523;
       "></div>
 
       <div style="
-        position:absolute;
-        top:42px;left:0;
-        width:100%;height:10px;
-        background:#a36c3c;
+        position:absolute;top:42px;left:0;
+        width:100%;height:10px;background:#a36c3c;
       "></div>
 
       <div style="
-        position:absolute;
-        top:68px;left:22px;
+        position:absolute;top:68px;left:22px;
         width:105px;height:78px;
-        background:#a9e0ef;
-        border:7px solid #754523;
+        background:#a9e0ef;border:7px solid #754523;
         box-sizing:border-box;
       ">
         <div style="
-            position:absolute;
-            left:50%;
-            height:100%;
-            width:4px;
-            background:#754523;
+            position:absolute;left:50%;height:100%;
+            width:4px;background:#754523;
         "></div>
-
         <div style="
-            position:absolute;
-            top:50%;
-            height:4px;
-            width:100%;
-            background:#754523;
+            position:absolute;top:50%;height:4px;
+            width:100%;background:#754523;
         "></div>
       </div>
 
       <div style="
-        position:absolute;
-        top:68px;right:22px;
+        position:absolute;top:68px;right:22px;
         width:95px;height:78px;
-        background:#a9e0ef;
-        border:7px solid #754523;
+        background:#a9e0ef;border:7px solid #754523;
         box-sizing:border-box;
       "></div>
 
       <div style="
-        position:absolute;
-        left:50%;
-        top:54%;
-        width:{diametro}%;
-        height:{diametro}%;
+        position:absolute;left:50%;top:54%;
+        width:{diametro}%;height:{diametro}%;
         transform:translate(-50%,-50%);
         border-radius:50%;
         background:radial-gradient(
@@ -1163,99 +1171,50 @@ def construir_corral(puerta, ventilacion):
         );
         border:2px dashed rgba(40,135,190,.65);
         transition:all .6s ease;
-        z-index:1;
-        pointer-events:none;
+        z-index:1;pointer-events:none;
       "></div>
 
       <div style="
-        position:absolute;
-        top:70px;
-        left:46%;
-        font-size:42px;
-        opacity:{intensidad_ventilador};
+        position:absolute;top:70px;left:46%;
+        font-size:42px;opacity:{intensidad_ventilador};
         z-index:2;
       ">🌀</div>
 
       <div style="
-        position:absolute;
-        bottom:0;left:0;
+        position:absolute;bottom:0;left:0;
         width:100%;height:83px;
-        background:#8b633f;
-        border-top:10px solid #4f8c38;
-        box-sizing:border-box;
-        z-index:2;
+        background:#8b633f;border-top:10px solid #4f8c38;
+        box-sizing:border-box;z-index:2;
       "></div>
 
-      <div style="
-        position:absolute;
-        bottom:73px;left:18%;
-        font-size:48px;
-        z-index:3;
-      ">🐔</div>
+      <div style="position:absolute;bottom:73px;left:18%;font-size:48px;z-index:3;">🐔</div>
+      <div style="position:absolute;bottom:77px;left:39%;font-size:54px;z-index:3;">🐓</div>
+      <div style="position:absolute;bottom:72px;left:61%;font-size:47px;z-index:3;">🐔</div>
+      <div style="position:absolute;bottom:76px;left:78%;font-size:45px;z-index:3;">🐔</div>
 
       <div style="
-        position:absolute;
-        bottom:77px;left:39%;
-        font-size:54px;
-        z-index:3;
-      ">🐓</div>
-
-      <div style="
-        position:absolute;
-        bottom:72px;left:61%;
-        font-size:47px;
-        z-index:3;
-      ">🐔</div>
-
-      <div style="
-        position:absolute;
-        bottom:76px;left:78%;
-        font-size:45px;
-        z-index:3;
-      ">🐔</div>
-
-      <div style="
-        position:absolute;
-        bottom:73px;
-        right:4%;
-        width:62px;
-        height:125px;
+        position:absolute;bottom:73px;right:4%;
+        width:62px;height:125px;
         background:{color_puerta};
         border:6px solid #603b21;
-        border-radius:5px;
-        box-sizing:border-box;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        color:white;
-        font-size:24px;
+        border-radius:5px;box-sizing:border-box;
+        display:flex;align-items:center;justify-content:center;
+        color:white;font-size:24px;
         transform:{movimiento_puerta};
         transform-origin:left center;
-        transition:transform .7s ease;
-        z-index:4;
+        transition:transform .7s ease;z-index:4;
       ">🚪</div>
 
       <div style="
-        position:absolute;
-        top:12px;
-        left:50%;
+        position:absolute;top:12px;left:50%;
         transform:translateX(-50%);
-        color:white;
-        font-size:15px;
-        font-weight:bold;
-        z-index:5;
+        color:white;font-size:15px;font-weight:bold;z-index:5;
       ">🐔 CORRAL DE GALLINAS</div>
 
       <div style="
-        position:absolute;
-        bottom:9px;
-        left:12px;
-        right:12px;
-        color:white;
-        font-weight:bold;
-        font-size:13px;
-        text-shadow:1px 1px 3px #222;
-        z-index:5;
+        position:absolute;bottom:9px;left:12px;right:12px;
+        color:white;font-weight:bold;font-size:13px;
+        text-shadow:1px 1px 3px #222;z-index:5;
       ">
         Puerta: {estado_puerta} &nbsp; | &nbsp;
         Ventilación: {ventilacion}% &nbsp; | &nbsp;
@@ -1265,7 +1224,6 @@ def construir_corral(puerta, ventilacion):
             else 'ALTO'
         }
       </div>
-
     </div>
     """
 
@@ -1279,7 +1237,7 @@ def construir_corral(puerta, ventilacion):
 
 
 # =====================================================
-# 11. PANEL DEL CORRAL
+# 12. PANEL EN VIVO
 # =====================================================
 
 @st.fragment(run_every="2s")
@@ -1295,39 +1253,33 @@ def panel_en_vivo():
     )
 
     if conectado_real:
-
         st.success(
             f"MQTT conectado · Tópico: {TOPICO_UNICO}"
         )
-
     else:
-
         st.warning(
             "Conectando con MQTT... Esperando telemetría de Wokwi."
         )
 
         if st.session_state.ultimo_error_mqtt:
-
             st.caption(
                 "Detalle: "
                 + str(st.session_state.ultimo_error_mqtt)
             )
 
     if st.session_state.comando_pendiente:
-
         st.info(
             f"Orden enviada: {st.session_state.comando_pendiente}. "
             "Esperando actualización del ESP32..."
         )
 
-    temperatura = datos.get(
-        "temperatura",
-        "--",
+    # Lecturas reales recibidas por MQTT
+    temperatura = convertir_lectura(
+        datos.get("temperatura")
     )
 
-    humedad_real = datos.get(
-        "humedad",
-        "--",
+    humedad_real = convertir_lectura(
+        datos.get("humedad")
     )
 
     ventilacion = numero_porcentaje(
@@ -1351,103 +1303,82 @@ def panel_en_vivo():
         50,
     )
 
-    puerta = datos.get(
-        "puerta",
-        "sin dato",
+    puerta = datos.get("puerta", "sin dato")
+
+    # -------------------------------------------------
+    # MEDICIONES ENCIMA DE LA ILUSTRACIÓN
+    # -------------------------------------------------
+
+    st.subheader("🌡️ Monitoreo ambiental del corral")
+
+    st.caption(
+        "Valores recibidos directamente desde el ESP32 mediante MQTT."
     )
+
+    mostrar_mediciones(
+        temperatura,
+        humedad_real,
+    )
+
+    # -------------------------------------------------
+    # ALERTAS GENERALES
+    # -------------------------------------------------
 
     alertas = []
 
-    try:
+    if temperatura is not None and temperatura < 20:
+        alertas.append(
+            f"Temperatura baja: {temperatura:.1f} °C. Hace frío."
+        )
+    elif temperatura is not None and temperatura >= 35:
+        alertas.append(
+            f"Temperatura alta: {temperatura:.1f} °C."
+        )
 
-        temp_num = convertir_lectura(temperatura)
-
-        if temp_num is None:
-            raise ValueError("Temperatura sin dato numérico")
-
-        if temp_num < 17:
-
-            alertas.append(
-                f"Temperatura baja ({temp_num:.1f} °C). "
-                "Revisa las condiciones térmicas del corral."
-            )
-
-        elif temp_num > 25:
-
-            alertas.append(
-                f"Temperatura alta ({temp_num:.1f} °C). "
-                "Revisa el ambiente del corral."
-            )
-
-    except (TypeError, ValueError):
-        pass
-
-    try:
-
-        hum_num = convertir_lectura(humedad_real)
-
-        if hum_num is None:
-            raise ValueError("Humedad sin dato numérico")
-
-        if hum_num < 30:
-
-            alertas.append(
-                f"Humedad baja ({hum_num:.0f} %). "
-                "Revisa las condiciones de humedad."
-            )
-
-        elif hum_num > 60:
-
-            alertas.append(
-                f"Humedad alta ({hum_num:.0f} %). "
-                "Revisa las condiciones del corral."
-            )
-
-    except (TypeError, ValueError):
-        pass
+    if humedad_real is not None and humedad_real < 20:
+        alertas.append(
+            f"Humedad baja: {humedad_real:.1f} %."
+        )
+    elif humedad_real is not None and humedad_real >= 35:
+        alertas.append(
+            f"Humedad alta: {humedad_real:.1f} %."
+        )
 
     puerta_txt = str(puerta).strip().lower()
 
-    puerta_abierta = puerta_txt in (
+    if puerta_txt in (
         "abierta",
         "abierto",
         "open",
         "1",
         "true",
-    )
-
-    if puerta_abierta:
+    ):
         alertas.append("La puerta del corral está abierta.")
 
     st.markdown(
-        "<h4 style='color:#17472d;margin:2px 0 5px 0;font-size:1rem;'>"
-        "🚨 Alertas del corral</h4>",
+        "<h4 style='color:#17472d;margin:8px 0;'>"
+        "🚨 Estado general del corral</h4>",
         unsafe_allow_html=True,
     )
 
     if alertas:
-
         for alerta in alertas:
-
             st.markdown(
                 f'<div class="alerta-roja">'
                 f'<strong>⚠️ ATENCIÓN</strong><br>{alerta}'
                 f'</div>',
                 unsafe_allow_html=True,
             )
-
-    elif temperatura == "--" and humedad_real == "--":
-
+    elif temperatura is None and humedad_real is None:
         st.markdown(
             '<div class="alerta-verde">'
             '<strong>Esperando datos de los sensores</strong><br>'
             'Cuando el ESP32 envíe sus mediciones, '
-            'las alertas aparecerán aquí.</div>',
+            'las alertas aparecerán aquí.'
+            '</div>',
             unsafe_allow_html=True,
         )
-
     else:
-
         st.markdown(
             '<div class="alerta-verde">'
             '<strong>✓ CORRAL ESTABLE</strong><br>'
@@ -1456,11 +1387,14 @@ def panel_en_vivo():
             unsafe_allow_html=True,
         )
 
+    # -------------------------------------------------
+    # ILUSTRACIÓN
+    # -------------------------------------------------
+
     st.subheader("🏡 Vista del interior del corral")
 
     st.caption(
-        "El círculo azul representa el alcance visual de la ventilación: "
-        "pequeño cuando es baja, mediano cuando es normal y amplio cuando es alta."
+        "El círculo azul representa el alcance visual de la ventilación."
     )
 
     estado_puerta, puerta_abierta = construir_corral(
@@ -1468,12 +1402,15 @@ def panel_en_vivo():
         ventilacion,
     )
 
+    # -------------------------------------------------
+    # PARÁMETROS CONTROLADOS POR GESTOS
+    # -------------------------------------------------
+
     st.subheader("📊 Parámetros controlados por gestos")
 
     st.caption(
-        "Aquí se muestran los porcentajes de los parámetros "
-        "que modifican las señas. Los ajustes térmico y de humedad "
-        "son simulados y no cambian las lecturas del DHT22."
+        "Los porcentajes representan los ajustes enviados al ESP32. "
+        "Las tarjetas superiores muestran las mediciones ambientales."
     )
 
     a, b, c, d = st.columns(4)
@@ -1518,9 +1455,13 @@ def panel_en_vivo():
     )
 
     y2.caption(
-        "Los ajustes térmico y de humedad son simulados; "
-        "no modifican físicamente la temperatura o la humedad."
+        "Las lecturas de temperatura y humedad se actualizan "
+        "cuando llega nueva telemetría del ESP32."
     )
+
+    # -------------------------------------------------
+    # MENSAJES ESP32
+    # -------------------------------------------------
 
     if st.session_state.respuestas_esp32:
 
@@ -1529,12 +1470,11 @@ def panel_en_vivo():
             for respuesta in reversed(
                 st.session_state.respuestas_esp32
             ):
-
                 st.write("• " + respuesta)
 
 
 # =====================================================
-# 12. CÁMARA Y CONTROL POR GESTOS
+# 13. CÁMARA Y CONTROL POR GESTOS
 # =====================================================
 
 col_corral, col_control = st.columns(
@@ -1543,7 +1483,6 @@ col_corral, col_control = st.columns(
 )
 
 with col_corral:
-
     panel_en_vivo()
 
 with col_control:
@@ -1573,7 +1512,6 @@ with col_control:
     )
 
     if st.session_state.ultima_confianza is not None:
-
         st.markdown(
             f"**Nivel de confianza:** "
             f"{st.session_state.ultima_confianza:.1f}%"
@@ -1626,7 +1564,7 @@ with col_control:
 
                     st.error(
                         f"Se esperaban 8 etiquetas y se encontraron "
-                        f"{len(etiquetas)}. Verifica el archivo labels.txt."
+                        f"{len(etiquetas)}. Verifica labels.txt."
                     )
 
                 elif indice not in ACCIONES:
@@ -1694,10 +1632,10 @@ with col_control:
         (1, "Cerrar puerta", "Cierra la puerta del corral."),
         (2, "Aumentar ventilación", "Aumenta 25 puntos la ventilación."),
         (3, "Disminuir ventilación", "Disminuye 25 puntos la ventilación."),
-        (4, "Subir ajuste térmico", "Aumenta 25 puntos el ajuste térmico."),
-        (5, "Bajar ajuste térmico", "Disminuye 25 puntos el ajuste térmico."),
-        (6, "Subir humedad", "Aumenta 25 puntos el ajuste de humedad."),
-        (7, "Bajar humedad", "Disminuye 25 puntos el ajuste de humedad."),
+        (4, "Subir ajuste térmico", "Aumenta el ajuste térmico."),
+        (5, "Bajar ajuste térmico", "Disminuye el ajuste térmico."),
+        (6, "Subir humedad", "Aumenta el ajuste de humedad."),
+        (7, "Bajar humedad", "Disminuye el ajuste de humedad."),
     ]
 
     for fila_inicio in range(
@@ -1714,7 +1652,6 @@ with col_control:
         ):
 
             indice, nombre, descripcion = item
-
             emoji = ACCIONES[indice]["emoji"]
 
             columna.markdown(
@@ -1733,7 +1670,7 @@ with col_control:
 
 
 # =====================================================
-# 13. FIN DE LA PÁGINA
+# 14. FIN DE LA PÁGINA
 # =====================================================
 
 st.divider()
