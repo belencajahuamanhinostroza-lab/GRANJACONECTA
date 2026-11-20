@@ -2,7 +2,6 @@
 import hashlib
 import json
 import queue
-import re
 import socket
 import uuid
 from pathlib import Path
@@ -170,71 +169,6 @@ div.stButton > button:hover {
     padding: 15px;
     color: #245c36;
 }
-
-.medicion-card {
-    background: #ffffff;
-    border: 1px solid #c9dfc4;
-    border-radius: 16px;
-    padding: 17px;
-    min-height: 145px;
-    box-shadow: 0 3px 12px rgba(20,60,35,.07);
-    margin-bottom: 12px;
-}
-
-.medicion-titulo {
-    color: #17472d;
-    font-size: 14px;
-    font-weight: 800;
-    margin-bottom: 9px;
-}
-
-.medicion-valor {
-    color: #17472d;
-    font-size: 34px;
-    font-weight: 800;
-    line-height: 1.2;
-}
-
-.medicion-unidad {
-    font-size: 15px;
-    color: #65816c;
-    font-weight: 600;
-}
-
-.estado-medicion {
-    display: inline-block;
-    padding: 5px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 800;
-    margin-top: 9px;
-}
-
-.estado-baja {
-    background: #ffe3e3;
-    color: #bd2424;
-}
-
-.estado-normal {
-    background: #dcf5df;
-    color: #19743a;
-}
-
-.estado-alta {
-    background: #fff0c7;
-    color: #a66a00;
-}
-
-.estado-sin-dato {
-    background: #eeeeee;
-    color: #666666;
-}
-
-.mensaje-medicion {
-    color: #607467;
-    font-size: 12px;
-    margin-top: 7px;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -262,12 +196,14 @@ for k, v in INICIALES.items():
         st.session_state[k] = v
 
 # =====================================================
-# 4. FUNCIONES DE MEDICIÓN
+# 4. FUNCIONES AUXILIARES
 # =====================================================
 
 def convertir_lectura(valor):
     if valor is None:
         return None
+
+    import re
 
     coincidencia = re.search(
         r"-?\d+(?:[.,]\d+)?",
@@ -285,126 +221,11 @@ def convertir_lectura(valor):
         return None
 
 
-def obtener_estado_medicion(valor):
-    """
-    Menor de 20: BAJA
-    Desde 20 hasta menos de 35: NORMAL
-    Desde 35: ALTA
-    """
-
-    if valor is None:
-        return (
-            "SIN LECTURA",
-            "sin-dato",
-            "Esperando datos del sensor",
-        )
-
-    if valor < 20:
-        return (
-            "BAJA",
-            "baja",
-            "Valor por debajo del rango normal",
-        )
-
-    if valor < 35:
-        return (
-            "NORMAL",
-            "normal",
-            "Medición dentro del rango normal",
-        )
-
-    return (
-        "ALTA",
-        "alta",
-        "Valor por encima del rango normal",
-    )
-
-
-def mostrar_mediciones(temperatura, humedad):
-    """
-    Las tarjetas muestran exclusivamente los valores
-    recibidos en la telemetría MQTT del ESP32.
-    """
-
-    estado_temp, clase_temp, mensaje_temp = (
-        obtener_estado_medicion(temperatura)
-    )
-
-    estado_hum, clase_hum, mensaje_hum = (
-        obtener_estado_medicion(humedad)
-    )
-
-    columnas = st.columns(2)
-
-    with columnas[0]:
-        valor_temp = (
-            f"{temperatura:.1f}"
-            if temperatura is not None
-            else "--"
-        )
-
-        st.markdown(f"""
-        <div class="medicion-card">
-            <div class="medicion-titulo">
-                🌡️ TEMPERATURA DEL CORRAL
-            </div>
-            <div class="medicion-valor">
-                {valor_temp}<span class="medicion-unidad"> °C</span>
-            </div>
-            <span class="estado-medicion estado-{clase_temp}">
-                {estado_temp}
-            </span>
-            <div class="mensaje-medicion">{mensaje_temp}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with columnas[1]:
-        valor_hum = (
-            f"{humedad:.1f}"
-            if humedad is not None
-            else "--"
-        )
-
-        st.markdown(f"""
-        <div class="medicion-card">
-            <div class="medicion-titulo">
-                💧 HUMEDAD DEL CORRAL
-            </div>
-            <div class="medicion-valor">
-                {valor_hum}<span class="medicion-unidad"> %</span>
-            </div>
-            <span class="estado-medicion estado-{clase_hum}">
-                {estado_hum}
-            </span>
-            <div class="mensaje-medicion">{mensaje_hum}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Alertas de temperatura
-    if temperatura is not None:
-        if temperatura < 20:
-            st.error(
-                f"🥶 ADVERTENCIA: temperatura baja "
-                f"({temperatura:.1f} °C). Hace frío en el corral."
-            )
-        elif temperatura >= 35:
-            st.error(
-                f"🔥 ALARMA: temperatura alta "
-                f"({temperatura:.1f} °C)."
-            )
-
-    # Alertas de humedad
-    if humedad is not None:
-        if humedad < 20:
-            st.warning(
-                f"💧 ADVERTENCIA: humedad baja "
-                f"({humedad:.1f} %)."
-            )
-        elif humedad >= 35:
-            st.error(
-                f"🚨 ALARMA: humedad alta "
-                f"({humedad:.1f} %)."
-            )
+def numero_porcentaje(valor, predeterminado=0):
+    try:
+        return max(0, min(100, int(float(valor))))
+    except (TypeError, ValueError):
+        return predeterminado
 
 
 # =====================================================
@@ -435,11 +256,7 @@ def crear_cliente_mqtt():
         )
 
         def al_conectar(
-            client,
-            userdata,
-            flags,
-            reason_code,
-            properties,
+            client, userdata, flags, reason_code, properties
         ):
             codigo = getattr(reason_code, "value", reason_code)
 
@@ -468,16 +285,9 @@ def crear_cliente_mqtt():
                 ))
 
         def al_desconectar(
-            client,
-            userdata,
-            disconnect_flags,
-            reason_code,
-            properties,
+            client, userdata, disconnect_flags, reason_code, properties
         ):
-            cola.put((
-                "conexion",
-                f"desconectado: {reason_code}",
-            ))
+            cola.put(("conexion", f"desconectado: {reason_code}"))
 
         def al_fallar_conexion(client, userdata):
             cola.put((
@@ -491,11 +301,7 @@ def crear_cliente_mqtt():
                     "utf-8",
                     errors="replace",
                 )
-
-                cola.put((
-                    mensaje.topic,
-                    contenido,
-                ))
+                cola.put((mensaje.topic, contenido))
             except Exception as exc:
                 cola.put(("error", str(exc)))
 
@@ -555,10 +361,7 @@ def enviar_comando(comando):
     try:
         resultado = cliente_mqtt.publish(
             TOPICO_UNICO,
-            payload=json.dumps(
-                mensaje,
-                ensure_ascii=False,
-            ),
+            payload=json.dumps(mensaje, ensure_ascii=False),
             qos=0,
             retain=False,
         )
@@ -620,10 +423,6 @@ def procesar_mensajes_mqtt():
 
         st.session_state.ultimo_paquete = paquete
         tipo = paquete.get("tipo")
-
-        # -------------------------------------------------
-        # TELEMETRÍA DEL ESP32
-        # -------------------------------------------------
 
         if tipo == "telemetria":
 
@@ -708,10 +507,6 @@ def procesar_mensajes_mqtt():
                     st.session_state.ultimo_cambio_confirmado = mensaje
                     st.session_state.comando_pendiente = ""
 
-        # -------------------------------------------------
-        # RESPUESTAS DEL ESP32
-        # -------------------------------------------------
-
         elif tipo == "respuesta":
 
             texto = paquete.get(
@@ -720,18 +515,12 @@ def procesar_mensajes_mqtt():
                     "mensaje",
                     paquete.get(
                         "status",
-                        paquete.get(
-                            "estado",
-                            "Respuesta del ESP32",
-                        ),
+                        paquete.get("estado", "Respuesta del ESP32"),
                     ),
                 ),
             )
 
-            st.session_state.respuestas_esp32.append(
-                str(texto)
-            )
-
+            st.session_state.respuestas_esp32.append(str(texto))
             st.session_state.respuestas_esp32 = (
                 st.session_state.respuestas_esp32[-8:]
             )
@@ -777,9 +566,7 @@ def mostrar_diagnostico_mqtt():
     )
 
     if conectado_real:
-        st.success(
-            f"MQTT CONECTADO · {BROKER}:{PUERTO}"
-        )
+        st.success(f"MQTT CONECTADO · {BROKER}:{PUERTO}")
         st.caption(f"Tópico: {TOPICO_UNICO}")
     else:
         st.error("MQTT DESCONECTADO")
@@ -796,10 +583,7 @@ def mostrar_diagnostico_mqtt():
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button(
-            "🧪 Probar conexión TCP",
-            use_container_width=True,
-        ):
+        if st.button("🧪 Probar conexión TCP", use_container_width=True):
             with st.spinner("Comprobando conexión..."):
                 correcto, detalle = comprobar_conexion_tcp()
 
@@ -809,10 +593,7 @@ def mostrar_diagnostico_mqtt():
                 st.error(detalle)
 
     with col2:
-        if st.button(
-            "🔄 Reiniciar conexión MQTT",
-            use_container_width=True,
-        ):
+        if st.button("🔄 Reiniciar conexión MQTT", use_container_width=True):
             crear_cliente_mqtt.clear()
             st.rerun()
 
@@ -839,10 +620,7 @@ def cargar_modelo(ruta):
             "Debe estar en la raíz del repositorio."
         )
 
-    return load_model(
-        archivo,
-        compile=False,
-    )
+    return load_model(archivo, compile=False)
 
 
 @st.cache_data
@@ -878,10 +656,7 @@ def reconocer_gesto(foto, modelo):
         .resize((224, 224))
     )
 
-    arreglo = np.asarray(
-        imagen,
-        dtype=np.float32,
-    )
+    arreglo = np.asarray(imagen, dtype=np.float32)
 
     entrada = np.empty(
         (1, 224, 224, 3),
@@ -890,10 +665,7 @@ def reconocer_gesto(foto, modelo):
 
     entrada[0] = (arreglo / 127.5) - 1.0
 
-    prediccion = modelo.predict(
-        entrada,
-        verbose=0,
-    )[0]
+    prediccion = modelo.predict(entrada, verbose=0)[0]
 
     indice = int(np.argmax(prediccion))
     confianza = float(prediccion[indice]) * 100.0
@@ -1002,7 +774,6 @@ with st.sidebar:
     st.write("🌀 Ventilación")
     st.write("🌡️ Ajuste térmico")
     st.write("💧 Ajuste de humedad")
-    st.write("📊 Monitoreo ambiental")
 
     with st.expander("📖 ¿Cómo utilizar la cámara?"):
         st.markdown("""
@@ -1039,7 +810,7 @@ st.markdown(
 st.markdown(
     "<p style='color:#477b4e;font-size:16px'>"
     "Controla el corral mediante gestos. Observa los cambios "
-    "y las mediciones que devuelve el ESP32 en Wokwi."
+    "que devuelve el ESP32 en Wokwi."
     "</p>",
     unsafe_allow_html=True,
 )
@@ -1059,17 +830,6 @@ st.divider()
 # 11. REPRESENTACIÓN DEL CORRAL
 # =====================================================
 
-def numero_porcentaje(valor, predeterminado=0):
-
-    try:
-        return max(
-            0,
-            min(100, int(float(valor))),
-        )
-    except (TypeError, ValueError):
-        return predeterminado
-
-
 def construir_corral(puerta, ventilacion):
 
     ventilacion = numero_porcentaje(ventilacion, 0)
@@ -1077,11 +837,7 @@ def construir_corral(puerta, ventilacion):
     puerta_txt = str(puerta).strip().lower()
 
     puerta_abierta = puerta_txt in (
-        "abierta",
-        "abierto",
-        "open",
-        "1",
-        "true",
+        "abierta", "abierto", "open", "1", "true"
     )
 
     if puerta_abierta:
@@ -1092,11 +848,7 @@ def construir_corral(puerta, ventilacion):
         estado_puerta = (
             "CERRADA"
             if puerta_txt in (
-                "cerrada",
-                "cerrado",
-                "closed",
-                "0",
-                "false",
+                "cerrada", "cerrado", "closed", "0", "false"
             )
             else "SIN DATO"
         )
@@ -1273,15 +1025,6 @@ def panel_en_vivo():
             "Esperando actualización del ESP32..."
         )
 
-    # Lecturas reales recibidas por MQTT
-    temperatura = convertir_lectura(
-        datos.get("temperatura")
-    )
-
-    humedad_real = convertir_lectura(
-        datos.get("humedad")
-    )
-
     ventilacion = numero_porcentaje(
         datos.get("ventilacion", 0),
         0,
@@ -1306,52 +1049,15 @@ def panel_en_vivo():
     puerta = datos.get("puerta", "sin dato")
 
     # -------------------------------------------------
-    # MEDICIONES ENCIMA DE LA ILUSTRACIÓN
+    # ESTADO GENERAL DEL CORRAL
     # -------------------------------------------------
-
-    st.subheader("🌡️ Monitoreo ambiental del corral")
-
-    st.caption(
-        "Valores recibidos directamente desde el ESP32 mediante MQTT."
-    )
-
-    mostrar_mediciones(
-        temperatura,
-        humedad_real,
-    )
-
-    # -------------------------------------------------
-    # ALERTAS GENERALES
-    # -------------------------------------------------
-
-    alertas = []
-
-    if temperatura is not None and temperatura < 20:
-        alertas.append(
-            f"Temperatura baja: {temperatura:.1f} °C. Hace frío."
-        )
-    elif temperatura is not None and temperatura >= 35:
-        alertas.append(
-            f"Temperatura alta: {temperatura:.1f} °C."
-        )
-
-    if humedad_real is not None and humedad_real < 20:
-        alertas.append(
-            f"Humedad baja: {humedad_real:.1f} %."
-        )
-    elif humedad_real is not None and humedad_real >= 35:
-        alertas.append(
-            f"Humedad alta: {humedad_real:.1f} %."
-        )
 
     puerta_txt = str(puerta).strip().lower()
 
+    alertas = []
+
     if puerta_txt in (
-        "abierta",
-        "abierto",
-        "open",
-        "1",
-        "true",
+        "abierta", "abierto", "open", "1", "true"
     ):
         alertas.append("La puerta del corral está abierta.")
 
@@ -1369,26 +1075,17 @@ def panel_en_vivo():
                 f'</div>',
                 unsafe_allow_html=True,
             )
-    elif temperatura is None and humedad_real is None:
-        st.markdown(
-            '<div class="alerta-verde">'
-            '<strong>Esperando datos de los sensores</strong><br>'
-            'Cuando el ESP32 envíe sus mediciones, '
-            'las alertas aparecerán aquí.'
-            '</div>',
-            unsafe_allow_html=True,
-        )
     else:
         st.markdown(
             '<div class="alerta-verde">'
             '<strong>✓ CORRAL ESTABLE</strong><br>'
-            'No se detectan alertas con las lecturas recibidas.'
+            'La puerta del corral se encuentra cerrada.'
             '</div>',
             unsafe_allow_html=True,
         )
 
     # -------------------------------------------------
-    # ILUSTRACIÓN
+    # ILUSTRACIÓN DEL CORRAL
     # -------------------------------------------------
 
     st.subheader("🏡 Vista del interior del corral")
@@ -1409,8 +1106,7 @@ def panel_en_vivo():
     st.subheader("📊 Parámetros controlados por gestos")
 
     st.caption(
-        "Los porcentajes representan los ajustes enviados al ESP32. "
-        "Las tarjetas superiores muestran las mediciones ambientales."
+        "Estos porcentajes representan los ajustes enviados al ESP32."
     )
 
     a, b, c, d = st.columns(4)
@@ -1455,12 +1151,11 @@ def panel_en_vivo():
     )
 
     y2.caption(
-        "Las lecturas de temperatura y humedad se actualizan "
-        "cuando llega nueva telemetría del ESP32."
+        "Los ajustes se actualizan cuando llega nueva telemetría del ESP32."
     )
 
     # -------------------------------------------------
-    # MENSAJES ESP32
+    # MENSAJES DEL ESP32
     # -------------------------------------------------
 
     if st.session_state.respuestas_esp32:
@@ -1537,13 +1232,8 @@ with col_control:
 
             try:
 
-                modelo = cargar_modelo(
-                    str(RUTA_MODELO)
-                )
-
-                etiquetas = cargar_etiquetas(
-                    str(RUTA_LABELS)
-                )
+                modelo = cargar_modelo(str(RUTA_MODELO))
+                etiquetas = cargar_etiquetas(str(RUTA_LABELS))
 
                 indice, confianza = reconocer_gesto(
                     foto,
@@ -1591,10 +1281,7 @@ with col_control:
                         unsafe_allow_html=True,
                     )
 
-                    ejecutar_gesto(
-                        indice,
-                        confianza,
-                    )
+                    ejecutar_gesto(indice, confianza)
 
                 else:
 
@@ -1638,11 +1325,7 @@ with col_control:
         (7, "Bajar humedad", "Disminuye el ajuste de humedad."),
     ]
 
-    for fila_inicio in range(
-        0,
-        len(tarjetas_gestos),
-        2,
-    ):
+    for fila_inicio in range(0, len(tarjetas_gestos), 2):
 
         gcols = st.columns(2)
 
