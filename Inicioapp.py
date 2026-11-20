@@ -2,221 +2,309 @@
 import base64
 import json
 import queue
-import threading
 from pathlib import Path
 
 import streamlit as st
 import streamlit.components.v1 as components
 
 
-# =========================================================
-# 1. CONFIGURACIÓN GENERAL
-# =========================================================
+# ==================================================
+# CONFIGURACIÓN
+# ==================================================
 
 st.set_page_config(
     page_title="GranjaConecta",
-    page_icon="🌾",
+    page_icon="🌱",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-CARPETA = Path(__file__).parent
-IMAGEN_FONDO = CARPETA / "fondogranja.jpg"
+CARPETA = Path(__file__).resolve().parent
+RUTA_IMAGEN = CARPETA / "fondogranja.jpg"
 
+# MQTT: conexión con Wokwi
 MQTT_BROKER = "broker.mqttdashboard.com"
 MQTT_PORT = 1883
 MQTT_TOPIC = "granjaconecta"
 
 
-# =========================================================
-# 2. ESTILOS GENERALES
-# =========================================================
+# ==================================================
+# CARGAR IMAGEN
+# ==================================================
 
-st.markdown("""
-<style>
+def cargar_imagen(ruta):
+    if not ruta.exists():
+        return None
 
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap');
+    extension = ruta.suffix.lower()
+    tipos = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+    }
 
-html, body, [class*="css"] {
-    font-family: 'Nunito', sans-serif;
-}
+    tipo = tipos.get(extension)
+    if tipo is None:
+        return None
 
-.stApp {
-    background: #f5f8f1;
-    color: #294332;
-}
+    with open(ruta, "rb") as archivo:
+        contenido = base64.b64encode(archivo.read()).decode("utf-8")
 
-header[data-testid="stHeader"] {
-    background: transparent;
-}
-
-[data-testid="stSidebar"] {
-    background: #e5efdc;
-    border-right: 1px solid #d2dfc9;
-}
-
-[data-testid="stSidebar"] * {
-    color: #294332;
-}
-
-h1, h2, h3 {
-    color: #315b3d;
-    font-weight: 900;
-}
-
-p {
-    color: #526b56;
-}
-
-.hero {
-    padding: 65px 45px;
-    border-radius: 25px;
-    background:
-        linear-gradient(
-            90deg,
-            rgba(20, 54, 34, 0.85),
-            rgba(20, 54, 34, 0.30)
-        ),
-        var(--hero-image);
-    background-size: cover;
-    background-position: center;
-    min-height: 310px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    color: white;
-    box-shadow: 0 8px 25px rgba(35, 70, 40, 0.12);
-}
-
-.hero h1 {
-    color: white !important;
-    font-size: 48px;
-    margin-bottom: 8px;
-}
-
-.hero p {
-    color: white !important;
-    font-size: 18px;
-    max-width: 650px;
-}
-
-.subtitulo {
-    color: #78916e;
-    font-size: 13px;
-    font-weight: 900;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-}
-
-.tarjeta {
-    background: white;
-    border: 1px solid #e3ebdf;
-    border-radius: 20px;
-    padding: 25px;
-    min-height: 205px;
-    box-shadow: 0 5px 18px rgba(43, 76, 47, 0.06);
-}
-
-.tarjeta h3 {
-    margin-top: 5px;
-}
-
-.tarjeta p {
-    font-size: 15px;
-}
-
-.stButton > button {
-    background: #4c8053;
-    color: white !important;
-    border: none;
-    border-radius: 12px;
-    padding: 10px 20px;
-    font-weight: 800;
-    transition: 0.2s;
-}
-
-.stButton > button:hover {
-    background: #315e3a;
-    color: white !important;
-    border: none;
-}
-
-.metrica {
-    background: white;
-    border: 1px solid #e3ebdf;
-    padding: 20px;
-    border-radius: 18px;
-    text-align: center;
-    min-height: 125px;
-}
-
-.metrica-titulo {
-    font-size: 14px;
-    font-weight: 800;
-    color: #71866c;
-}
-
-.metrica-valor {
-    font-size: 32px;
-    font-weight: 900;
-    color: #315b3d;
-}
-
-.estado {
-    font-size: 13px;
-    font-weight: 900;
-    margin-top: 3px;
-}
-
-.pie {
-    text-align: center;
-    color: #82947c;
-    padding: 30px 10px;
-    font-size: 13px;
-}
-
-</style>
-""", unsafe_allow_html=True)
+    return f"data:{tipo};base64,{contenido}"
 
 
-# =========================================================
-# 3. IMAGEN DE FONDO
-# =========================================================
+imagen_portada = cargar_imagen(RUTA_IMAGEN)
 
-imagen_base64 = ""
 
-if IMAGEN_FONDO.exists():
-    with open(IMAGEN_FONDO, "rb") as archivo:
-        imagen_base64 = base64.b64encode(
-            archivo.read()
-        ).decode()
-
-if imagen_base64:
-    imagen_css = f"url('data:image/jpeg;base64,{imagen_base64}')"
-else:
-    imagen_css = "linear-gradient(120deg, #719b68, #b9cf9e)"
+# ==================================================
+# ESTILOS GENERALES DE STREAMLIT
+# ==================================================
 
 st.markdown(
-    f"""
+    """
     <style>
-    .hero {{
-        --hero-image: {imagen_css};
-    }}
+    .stApp {
+        background-color: #f4faf5;
+        color: #183d2b;
+    }
+
+    [data-testid="stHeader"] {
+        background-color: transparent;
+    }
+
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+        max-width: 1250px;
+    }
+
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #123d2b 0%, #1c5638 100%);
+    }
+
+    [data-testid="stSidebar"] * {
+        color: white;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+        color: white;
+    }
+
+    .section-title {
+        color: #17452e;
+        font-size: 27px;
+        font-weight: 800;
+        margin-bottom: 8px;
+    }
+
+    .section-description {
+        color: #61776a;
+        font-size: 15px;
+        line-height: 1.6;
+        margin-bottom: 25px;
+    }
+
+    div.stButton > button {
+        background-color: #c6f36a;
+        color: #173d29;
+        border: none;
+        border-radius: 10px;
+        padding: 11px 20px;
+        font-weight: 800;
+        min-height: 45px;
+        transition: 0.2s ease;
+    }
+
+    div.stButton > button:hover {
+        background-color: #d8ff8a;
+        color: #123d29;
+        border: none;
+        transform: translateY(-2px);
+    }
+
+    .footer-line {
+        height: 1px;
+        background-color: #d8e8dc;
+        margin-top: 45px;
+        margin-bottom: 20px;
+    }
+
+    .footer-text {
+        text-align: center;
+        color: #789080;
+        font-size: 12px;
+        padding-bottom: 10px;
+    }
+
+    @media (max-width: 700px) {
+        .block-container {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True
 )
 
 
-# =========================================================
-# 4. CONEXIÓN MQTT
-# =========================================================
+# ==================================================
+# MENÚ LATERAL
+# ==================================================
+
+with st.sidebar:
+    st.markdown(
+        """
+        <div style="text-align:center; padding:20px 5px 25px 5px;">
+            <div style="font-size:42px;">🌱</div>
+            <div style="font-size:23px; font-weight:800; color:white;">
+                GranjaConecta
+            </div>
+            <div style="font-size:11px; letter-spacing:2px; color:#c6f36a; margin-top:5px;">
+                TECNOLOGÍA PARA EL CAMPO
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown("---")
+    st.markdown("### Navegación")
+
+    st.page_link("Inicioapp.py", label="🏠 Inicio")
+    st.page_link("pages/1_Bebedero.py", label="💧 Bebedero")
+    st.page_link("pages/2_Corral.py", label="🐄 Corral")
+
+    st.markdown("---")
+    st.caption("Sistema inteligente para el cuidado animal")
+
+
+# ==================================================
+# PORTADA: HTML EN COMPONENTE INDEPENDIENTE
+# ==================================================
+
+if imagen_portada:
+    fondo_css = f"background-image: linear-gradient(90deg, rgba(8,39,25,.88) 0%, rgba(12,54,33,.65) 55%, rgba(12,54,33,.10) 100%), url('{imagen_portada}');"
+else:
+    fondo_css = "background: linear-gradient(135deg, #174a32, #246642);"
+
+html_portada = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+* {{ box-sizing: border-box; }}
+html, body {{
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    font-family: Arial, Helvetica, sans-serif;
+}}
+.hero {{
+    width: 100%;
+    min-height: 390px;
+    border-radius: 22px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    background-color: #1b5638;
+    background-size: cover;
+    background-position: center;
+    {fondo_css}
+}}
+.hero-content {{
+    padding: 55px;
+    max-width: 700px;
+}}
+.hero-label {{
+    color: #c6f36a;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    margin-bottom: 18px;
+}}
+.hero-title {{
+    color: white;
+    font-size: clamp(38px, 6vw, 65px);
+    font-weight: 800;
+    line-height: 1.05;
+    margin: 0 0 20px 0;
+}}
+.hero-description {{
+    color: #f1f8f1;
+    font-size: 17px;
+    line-height: 1.7;
+    max-width: 570px;
+}}
+.hero-line {{
+    width: 85px;
+    height: 5px;
+    background-color: #c6f36a;
+    border-radius: 10px;
+    margin-top: 25px;
+}}
+@media (max-width: 700px) {{
+    .hero {{ min-height: 360px; }}
+    .hero-content {{ padding: 28px; }}
+    .hero-description {{ font-size: 15px; }}
+}}
+</style>
+</head>
+<body>
+    <div class="hero">
+        <div class="hero-content">
+            <div class="hero-label">TECNOLOGÍA PARA EL CAMPO</div>
+            <h1 class="hero-title">GranjaConecta</h1>
+            <div class="hero-description">
+                Conectamos la tecnología con el bienestar animal.
+                Una granja inteligente donde el monitoreo y la
+                automatización facilitan el cuidado diario.
+            </div>
+            <div class="hero-line"></div>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+components.html(html_portada, height=410, scrolling=False)
+
+if not imagen_portada:
+    st.warning(
+        "No se encontró fondogranja.jpg. "
+        "Coloca la imagen en la misma carpeta que Inicioapp.py."
+    )
+
+
+# ==================================================
+# PRESENTACIÓN
+# ==================================================
+
+st.markdown(
+    """
+    <div class="section-title">Bienvenido a GranjaConecta</div>
+    <div class="section-description">
+        Una solución tecnológica diseñada para facilitar
+        el monitoreo y la automatización de las actividades
+        de una granja, conectando sensores, dispositivos
+        y herramientas digitales en un solo lugar.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# ==================================================
+# NUEVO: CONEXIÓN MQTT CON WOKWI
+# ==================================================
 
 @st.cache_resource
-def iniciar_mqtt():
+def iniciar_conexion_mqtt():
 
     mensajes = queue.Queue()
-    estado_conexion = {
+
+    estado = {
         "conectado": False,
         "error": ""
     }
@@ -232,16 +320,12 @@ def iniciar_mqtt():
             properties
         ):
             if reason_code == 0:
-                estado_conexion["conectado"] = True
-                estado_conexion["error"] = ""
-
+                estado["conectado"] = True
+                estado["error"] = ""
                 cliente.subscribe(MQTT_TOPIC)
-
             else:
-                estado_conexion["conectado"] = False
-                estado_conexion["error"] = (
-                    f"Error de conexión MQTT: {reason_code}"
-                )
+                estado["conectado"] = False
+                estado["error"] = str(reason_code)
 
         def al_desconectar(
             cliente,
@@ -250,14 +334,12 @@ def iniciar_mqtt():
             reason_code,
             properties
         ):
-            estado_conexion["conectado"] = False
+            estado["conectado"] = False
 
         def al_recibir(cliente, userdata, mensaje):
-
             try:
                 contenido = mensaje.payload.decode("utf-8")
                 mensajes.put(contenido)
-
             except Exception:
                 pass
 
@@ -280,93 +362,75 @@ def iniciar_mqtt():
 
         cliente.loop_start()
 
-        return cliente, mensajes, estado_conexion
+        return cliente, mensajes, estado
 
     except Exception as error:
-
-        estado_conexion["conectado"] = False
-        estado_conexion["error"] = str(error)
-
-        return None, mensajes, estado_conexion
+        estado["error"] = str(error)
+        return None, mensajes, estado
 
 
-cliente_mqtt, cola_mqtt, conexion_mqtt = iniciar_mqtt()
+cliente_mqtt, cola_mensajes, estado_mqtt = iniciar_conexion_mqtt()
 
 
-# =========================================================
-# 5. VARIABLES DE SESIÓN
-# =========================================================
+# ==================================================
+# DATOS RECIBIDOS DESDE WOKWI
+# ==================================================
 
-if "telemetria_granja" not in st.session_state:
-    st.session_state.telemetria_granja = {
+if "datos_ambientales" not in st.session_state:
+    st.session_state.datos_ambientales = {
         "temperatura": None,
         "humedad": None
     }
 
 
-if "ultimo_mensaje_granja" not in st.session_state:
-    st.session_state.ultimo_mensaje_granja = ""
-
-
-def procesar_mensajes():
+def leer_datos_mqtt():
 
     while True:
 
         try:
-            mensaje = cola_mqtt.get_nowait()
-
+            mensaje = cola_mensajes.get_nowait()
         except queue.Empty:
             break
 
         try:
             paquete = json.loads(mensaje)
 
-            if paquete.get("tipo") != "telemetria":
+            # Acepta mensajes con tipo telemetria
+            # y también mensajes que envían los datos directamente.
+            if paquete.get("tipo") not in (None, "telemetria"):
                 continue
 
             datos = paquete.get("datos", paquete)
 
-            temperatura = datos.get("temperatura")
-            humedad = datos.get("humedad")
+            temperatura = datos.get(
+                "temperatura",
+                datos.get("temp")
+            )
+
+            humedad = datos.get(
+                "humedad",
+                datos.get("hum")
+            )
 
             if temperatura is not None:
-                st.session_state.telemetria_granja[
+                st.session_state.datos_ambientales[
                     "temperatura"
                 ] = float(temperatura)
 
             if humedad is not None:
-                st.session_state.telemetria_granja[
+                st.session_state.datos_ambientales[
                     "humedad"
                 ] = float(humedad)
-
-            st.session_state.ultimo_mensaje_granja = mensaje
 
         except (ValueError, TypeError, json.JSONDecodeError):
             continue
 
 
-# =========================================================
-# 6. CLASIFICACIÓN DE LOS VALORES
-# =========================================================
+# ==================================================
+# CLASIFICAR ESTADO AMBIENTAL
+# ==================================================
 
-def clasificar_valor(valor):
-
-    if valor is None:
-        return "SIN DATOS"
-
-    if valor < 20:
-        return "BAJA"
-
-    elif valor >= 35:
-        return "ALTA"
-
-    return "NORMAL"
-
-
-def obtener_estado_granja(temperatura, humedad):
-
-    if temperatura is None and humedad is None:
-        return "espera"
+def obtener_estado(temperatura, humedad):
 
     valores = [
         valor
@@ -374,724 +438,639 @@ def obtener_estado_granja(temperatura, humedad):
         if valor is not None
     ]
 
-    # Si algún valor es alto, se prioriza el estado amarillo.
+    if not valores:
+        return "espera"
+
     if any(valor >= 35 for valor in valores):
         return "alto"
 
-    # Si algún valor es bajo, se muestra el estado azul.
     if any(valor < 20 for valor in valores):
         return "bajo"
 
     return "normal"
 
 
-# =========================================================
-# 7. ILUSTRACIÓN DE LA GRANJA
-# =========================================================
+def clasificar_sensor(valor):
 
-def crear_ilustracion(estado):
+    if valor is None:
+        return "Sin datos"
 
-    configuracion = {
+    if valor < 20:
+        return "BAJA"
+
+    if valor >= 35:
+        return "ALTA"
+
+    return "NORMAL"
+
+
+# ==================================================
+# ILUSTRACIÓN DE LA GRANJA
+# ==================================================
+
+def ilustracion_granja(estado):
+
+    estados = {
         "normal": {
             "clase": "normal",
             "titulo": "AMBIENTE ESTABLE",
-            "descripcion": "Las lecturas se encuentran dentro del rango normal.",
+            "mensaje": "Las lecturas se encuentran dentro del rango normal.",
             "emoji": "🌿"
         },
         "bajo": {
             "clase": "bajo",
             "titulo": "VALOR BAJO DETECTADO",
-            "descripcion": "La temperatura o humedad presenta un valor bajo.",
+            "mensaje": "La temperatura o humedad presenta un valor bajo.",
             "emoji": "❄️"
         },
         "alto": {
             "clase": "alto",
             "titulo": "VALOR ALTO DETECTADO",
-            "descripcion": "La temperatura o humedad presenta un valor alto.",
+            "mensaje": "La temperatura o humedad presenta un valor alto.",
             "emoji": "☀️"
         },
         "espera": {
             "clase": "espera",
-            "titulo": "ESPERANDO DATOS DEL ESP32",
-            "descripcion": "Conecta Wokwi para visualizar el estado de la granja.",
+            "titulo": "ESPERANDO DATOS DE WOKWI",
+            "mensaje": "Inicia la simulación para visualizar tu granja.",
             "emoji": "📡"
         }
     }
 
-    datos = configuracion[estado]
+    datos = estados[estado]
 
     return f"""
-    <html>
-    <head>
-    <meta charset="UTF-8">
-
-    <style>
-
-    * {{
-        box-sizing: border-box;
-    }}
-
-    body {{
-        margin: 0;
-        padding: 0;
-        font-family: Arial, sans-serif;
-        background: transparent;
-    }}
-
-    .escena {{
-        width: 100%;
-        height: 430px;
-        overflow: hidden;
-        border-radius: 22px;
-        position: relative;
-        background: #dcebd3;
-        border: 2px solid rgba(80, 110, 70, 0.15);
-    }}
-
-    .paisaje {{
-        width: 100%;
-        height: 100%;
-        display: block;
-    }}
-
-    .normal {{
-        --cielo1: #8fd5ee;
-        --cielo2: #d8f1ec;
-        --montana: #8eae83;
-        --pasto: #78b76d;
-        --pasto2: #a5d17d;
-        --granero: #c95e48;
-        --techo: #853c35;
-        --camino: #d8bf91;
-        --arbol: #4d8e50;
-        --sol: #ffe58b;
-    }}
-
-    .bajo {{
-        --cielo1: #4f9cc8;
-        --cielo2: #b5d8ed;
-        --montana: #6d91b0;
-        --pasto: #76a9b4;
-        --pasto2: #a6cbd2;
-        --granero: #527f9e;
-        --techo: #345c7d;
-        --camino: #b4c9d0;
-        --arbol: #598b91;
-        --sol: #d7ecf5;
-    }}
-
-    .alto {{
-        --cielo1: #f3c05d;
-        --cielo2: #ffe7a5;
-        --montana: #d9ad68;
-        --pasto: #c8a64d;
-        --pasto2: #e5c76c;
-        --granero: #c87936;
-        --techo: #98502b;
-        --camino: #e5c17d;
-        --arbol: #a5a34c;
-        --sol: #fff3a0;
-    }}
-
-    .espera {{
-        --cielo1: #b9c7c0;
-        --cielo2: #e2e9df;
-        --montana: #9eae9a;
-        --pasto: #9eaf8d;
-        --pasto2: #b9c6a4;
-        --granero: #9d8d77;
-        --techo: #716657;
-        --camino: #c8b99b;
-        --arbol: #788d68;
-        --sol: #e5dfb6;
-    }}
-
-    .cielo {{
-        fill: url(#gradienteCielo);
-    }}
-
-    .montana {{
-        fill: var(--montana);
-    }}
-
-    .pasto {{
-        fill: var(--pasto);
-    }}
-
-    .pasto2 {{
-        fill: var(--pasto2);
-    }}
-
-    .granero {{
-        fill: var(--granero);
-        stroke: #603e35;
-        stroke-width: 3;
-    }}
-
-    .techo {{
-        fill: var(--techo);
-        stroke: #603e35;
-        stroke-width: 3;
-    }}
-
-    .camino {{
-        fill: var(--camino);
-    }}
-
-    .arbol {{
-        fill: var(--arbol);
-    }}
-
-    .sol {{
-        fill: var(--sol);
-    }}
-
-    .nube {{
-        fill: rgba(255,255,255,0.8);
-    }}
-
-    .ventana {{
-        fill: #f8e9b5;
-        stroke: #603e35;
-        stroke-width: 3;
-    }}
-
-    .puerta {{
-        fill: #744737;
-        stroke: #50352e;
-        stroke-width: 3;
-    }}
-
-    .cerca {{
-        stroke: #f4e5c5;
-        stroke-width: 8;
-        stroke-linecap: round;
-        fill: none;
-    }}
-
-    .etiqueta {{
-        position: absolute;
-        top: 15px;
-        left: 15px;
-        right: 15px;
-        padding: 12px 15px;
-        border-radius: 13px;
-        background: rgba(255,255,255,0.87);
-        color: #34513b;
-        font-weight: 900;
-        font-size: 14px;
-        text-align: center;
-        letter-spacing: 0.5px;
-    }}
-
-    .descripcion {{
-        font-size: 12px;
-        font-weight: 600;
-        display: block;
-        margin-top: 4px;
-        color: #657665;
-    }}
-
-    .animales {{
-        font-size: 35px;
-    }}
-
-    </style>
-    </head>
-
-    <body>
-
-    <div class="escena {datos['clase']}">
-
-        <div class="etiqueta">
-            {datos['emoji']} {datos['titulo']}
-            <span class="descripcion">{datos['descripcion']}</span>
-        </div>
-
-        <svg class="paisaje" viewBox="0 0 1000 430"
-             preserveAspectRatio="xMidYMid slice">
-
-            <defs>
-                <linearGradient id="gradienteCielo"
-                    x1="0" y1="0" x2="0" y2="1">
-
-                    <stop offset="0%" stop-color="var(--cielo1)"/>
-                    <stop offset="100%" stop-color="var(--cielo2)"/>
-
-                </linearGradient>
-            </defs>
-
-            <!-- CIELO -->
-            <rect width="1000" height="430" class="cielo"/>
-
-            <!-- SOL -->
-            <circle cx="830" cy="105" r="48" class="sol"/>
-
-            <!-- NUBES -->
-            <g class="nube">
-                <ellipse cx="180" cy="105" rx="65" ry="22"/>
-                <ellipse cx="220" cy="90" rx="35" ry="28"/>
-                <ellipse cx="255" cy="108" rx="45" ry="20"/>
-
-                <ellipse cx="560" cy="125" rx="60" ry="20"/>
-                <ellipse cx="595" cy="110" rx="35" ry="25"/>
-                <ellipse cx="630" cy="127" rx="42" ry="18"/>
-            </g>
-
-            <!-- MONTAÑAS -->
-            <path d="
-                M0 250
-                L130 145
-                L240 235
-                L365 125
-                L520 245
-                L680 150
-                L830 250
-                L930 165
-                L1000 220
-                L1000 430
-                L0 430 Z"
-                class="montana"/>
-
-            <!-- PASTO DEL FONDO -->
-            <path d="
-                M0 260
-                Q200 220 390 265
-                Q650 215 1000 260
-                L1000 430
-                L0 430 Z"
-                class="pasto"/>
-
-            <!-- CAMINO -->
-            <path d="
-                M390 430
-                Q450 335 510 315
-                Q560 290 610 260
-                Q570 350 620 430 Z"
-                class="camino"/>
-
-            <!-- COLINAS -->
-            <path d="
-                M0 315
-                Q180 255 350 310
-                Q570 360 760 300
-                Q890 260 1000 310
-                L1000 430 L0 430 Z"
-                class="pasto2"/>
-
-            <!-- ÁRBOLES IZQUIERDOS -->
-            <g>
-                <rect x="75" y="235" width="18" height="80" fill="#79543b"/>
-                <circle cx="84" cy="215" r="42" class="arbol"/>
-                <circle cx="58" cy="235" r="28" class="arbol"/>
-                <circle cx="108" cy="237" r="28" class="arbol"/>
-
-                <rect x="920" y="235" width="18" height="80" fill="#79543b"/>
-                <circle cx="929" cy="215" r="42" class="arbol"/>
-                <circle cx="900" cy="238" r="28" class="arbol"/>
-                <circle cx="955" cy="237" r="28" class="arbol"/>
-            </g>
-
-            <!-- GRANERO GRANDE -->
-            <g>
-                <rect x="330" y="190" width="220" height="145"
-                    rx="4" class="granero"/>
-
-                <path d="
-                    M300 195
-                    L440 105
-                    L580 195 Z"
-                    class="techo"/>
-
-                <rect x="410" y="255" width="62" height="80"
-                    rx="3" class="puerta"/>
-
-                <rect x="355" y="220" width="38" height="38"
-                    class="ventana"/>
-
-                <rect x="485" y="220" width="38" height="38"
-                    class="ventana"/>
-
-                <path d="M440 255 V335" stroke="#d8ad77" stroke-width="4"/>
-                <path d="M410 280 H472" stroke="#d8ad77" stroke-width="4"/>
-            </g>
-
-            <!-- GRANERO PEQUEÑO IZQUIERDO -->
-            <g>
-                <rect x="125" y="245" width="130" height="90"
-                    class="granero"/>
-
-                <path d="M105 250 L190 190 L275 250 Z"
-                    class="techo"/>
-
-                <rect x="175" y="285" width="35" height="50"
-                    class="puerta"/>
-
-                <rect x="140" y="265" width="24" height="24"
-                    class="ventana"/>
-            </g>
-
-            <!-- GRANERO PEQUEÑO DERECHO -->
-            <g>
-                <rect x="690" y="245" width="135" height="90"
-                    class="granero"/>
-
-                <path d="M670 250 L757 190 L845 250 Z"
-                    class="techo"/>
-
-                <rect x="740" y="285" width="35" height="50"
-                    class="puerta"/>
-
-                <rect x="710" y="265" width="24" height="24"
-                    class="ventana"/>
-            </g>
-
-            <!-- CERCA -->
-            <path d="
-                M0 355 H1000
-                M0 380 H1000"
-                class="cerca"/>
-
-            <g stroke="#e8d8b5" stroke-width="9">
-                <path d="M100 340 V400"/>
-                <path d="M240 340 V400"/>
-                <path d="M380 340 V400"/>
-                <path d="M520 340 V400"/>
-                <path d="M660 340 V400"/>
-                <path d="M800 340 V400"/>
-                <path d="M940 340 V400"/>
-            </g>
-
-            <!-- ANIMALES -->
-            <g class="animales">
-
-                <text x="265" y="355">🐄</text>
-                <text x="560" y="355">🐑</text>
-                <text x="620" y="385">🐔</text>
-                <text x="840" y="355">🐄</text>
-                <text x="170" y="395">🐓</text>
-
-            </g>
-
-            <!-- FLORES -->
-            <g font-size="22">
-                <text x="35" y="330">🌼</text>
-                <text x="285" y="410">🌸</text>
-                <text x="680" y="420">🌼</text>
-                <text x="970" y="330">🌻</text>
-            </g>
-
-        </svg>
-
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+
+<style>
+
+* {{
+    box-sizing: border-box;
+}}
+
+body {{
+    margin: 0;
+    font-family: Arial, sans-serif;
+}}
+
+.granja {{
+    height: 430px;
+    width: 100%;
+    overflow: hidden;
+    position: relative;
+    border-radius: 20px;
+    border: 2px solid rgba(40,80,50,.12);
+}}
+
+.normal {{
+    --cielo1: #75c9ec;
+    --cielo2: #d8f3ed;
+    --montana: #83a77c;
+    --pasto: #64a958;
+    --pasto2: #9bce77;
+    --granero: #c95d48;
+    --techo: #843b32;
+    --camino: #d8bd8b;
+    --arbol: #42854a;
+    --sol: #ffe88e;
+}}
+
+.bajo {{
+    --cielo1: #438bbd;
+    --cielo2: #b9d9ee;
+    --montana: #688eaa;
+    --pasto: #6d9fae;
+    --pasto2: #a5c8d1;
+    --granero: #527e9c;
+    --techo: #345873;
+    --camino: #b5cbd2;
+    --arbol: #54858b;
+    --sol: #d9eaf3;
+}}
+
+.alto {{
+    --cielo1: #efb44d;
+    --cielo2: #ffe4a0;
+    --montana: #d1a15f;
+    --pasto: #c1a047;
+    --pasto2: #e4c66d;
+    --granero: #c87935;
+    --techo: #914c29;
+    --camino: #e5c17b;
+    --arbol: #969b43;
+    --sol: #fff39a;
+}}
+
+.espera {{
+    --cielo1: #aabeb9;
+    --cielo2: #e2e9df;
+    --montana: #91a28e;
+    --pasto: #91a77e;
+    --pasto2: #b9c69e;
+    --granero: #968875;
+    --techo: #716657;
+    --camino: #c8b99b;
+    --arbol: #748b68;
+    --sol: #e5dfb6;
+}}
+
+.granja {{
+    background: linear-gradient(
+        to bottom,
+        var(--cielo1),
+        var(--cielo2)
+    );
+}}
+
+.estado {{
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    right: 14px;
+    z-index: 5;
+    background: rgba(255,255,255,.88);
+    padding: 12px;
+    text-align: center;
+    border-radius: 12px;
+    color: #31553b;
+    font-weight: 900;
+    font-size: 14px;
+}}
+
+.estado small {{
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 4px;
+    color: #61776a;
+}}
+
+svg {{
+    width: 100%;
+    height: 100%;
+    display: block;
+}}
+
+.cielo {{
+    fill: transparent;
+}}
+
+.montana {{
+    fill: var(--montana);
+}}
+
+.pasto {{
+    fill: var(--pasto);
+}}
+
+.pasto2 {{
+    fill: var(--pasto2);
+}}
+
+.granero {{
+    fill: var(--granero);
+    stroke: #684235;
+    stroke-width: 3;
+}}
+
+.techo {{
+    fill: var(--techo);
+    stroke: #684235;
+    stroke-width: 3;
+}}
+
+.puerta {{
+    fill: #744737;
+    stroke: #50352e;
+    stroke-width: 3;
+}}
+
+.ventana {{
+    fill: #f8e9b5;
+    stroke: #603e35;
+    stroke-width: 3;
+}}
+
+.arbol {{
+    fill: var(--arbol);
+}}
+
+.camino {{
+    fill: var(--camino);
+}}
+
+.sol {{
+    fill: var(--sol);
+}}
+
+.nube {{
+    fill: rgba(255,255,255,.8);
+}}
+
+.cerca {{
+    stroke: #f4e5c5;
+    stroke-width: 8;
+    stroke-linecap: round;
+    fill: none;
+}}
+
+</style>
+</head>
+
+<body>
+
+<div class="granja {datos['clase']}">
+
+    <div class="estado">
+        {datos['emoji']} {datos['titulo']}
+        <small>{datos['mensaje']}</small>
     </div>
 
-    </body>
-    </html>
-    """
+    <svg viewBox="0 0 1000 430"
+         preserveAspectRatio="xMidYMid slice">
 
+        <!-- CIELO -->
+        <rect width="1000" height="430" class="cielo"/>
 
-# =========================================================
-# 8. MENÚ LATERAL
-# =========================================================
+        <!-- SOL -->
+        <circle cx="830" cy="110" r="48" class="sol"/>
 
-with st.sidebar:
+        <!-- NUBES -->
+        <g class="nube">
+            <ellipse cx="160" cy="110" rx="60" ry="20"/>
+            <ellipse cx="195" cy="95" rx="38" ry="27"/>
+            <ellipse cx="230" cy="112" rx="40" ry="19"/>
 
-    st.markdown(
-        "<h2>🌾 GranjaConecta</h2>",
-        unsafe_allow_html=True
-    )
+            <ellipse cx="550" cy="125" rx="58" ry="19"/>
+            <ellipse cx="585" cy="110" rx="35" ry="24"/>
+            <ellipse cx="620" cy="128" rx="42" ry="18"/>
+        </g>
 
-    st.markdown("---")
+        <!-- MONTAÑAS -->
+        <path d="
+            M0 255
+            L130 150
+            L240 235
+            L365 125
+            L520 245
+            L680 150
+            L830 250
+            L930 165
+            L1000 220
+            L1000 430
+            L0 430 Z"
+            class="montana"/>
 
-    st.markdown("### Menú principal")
+        <!-- TERRENO -->
+        <path d="
+            M0 260
+            Q200 220 390 265
+            Q650 215 1000 260
+            L1000 430
+            L0 430 Z"
+            class="pasto"/>
 
-    if st.button("🏡 Inicio", use_container_width=True):
-        st.switch_page("Inicioapp.py")
+        <!-- CAMINO -->
+        <path d="
+            M390 430
+            Q450 335 510 315
+            Q560 290 610 260
+            Q570 350 620 430 Z"
+            class="camino"/>
 
-    if st.button("🐄 Corral inteligente", use_container_width=True):
-        st.switch_page("pages/2_Corral.py")
+        <!-- PASTO DELANTERO -->
+        <path d="
+            M0 315
+            Q180 255 350 310
+            Q570 360 760 300
+            Q890 260 1000 310
+            L1000 430 L0 430 Z"
+            class="pasto2"/>
 
-    if st.button("💧 Bebedero inteligente", use_container_width=True):
-        st.switch_page("pages/1_Bebedero.py")
+        <!-- ÁRBOLES -->
+        <g>
+            <rect x="75" y="235" width="18" height="80"
+                  fill="#79543b"/>
+            <circle cx="84" cy="215" r="42" class="arbol"/>
+            <circle cx="58" cy="235" r="28" class="arbol"/>
+            <circle cx="108" cy="237" r="28" class="arbol"/>
 
-    st.markdown("---")
+            <rect x="920" y="235" width="18" height="80"
+                  fill="#79543b"/>
+            <circle cx="929" cy="215" r="42" class="arbol"/>
+            <circle cx="900" cy="238" r="28" class="arbol"/>
+            <circle cx="955" cy="237" r="28" class="arbol"/>
+        </g>
 
-    if conexion_mqtt["conectado"]:
-        st.success("MQTT conectado")
-    else:
-        st.warning("Conectando con MQTT...")
+        <!-- GRANERO PRINCIPAL -->
+        <g>
+            <rect x="330" y="190" width="220" height="145"
+                  class="granero"/>
 
-    st.caption(f"Servidor: {MQTT_BROKER}")
-    st.caption(f"Tópico: {MQTT_TOPIC}")
+            <path d="M300 195 L440 105 L580 195 Z"
+                  class="techo"/>
 
+            <rect x="410" y="255" width="62" height="80"
+                  class="puerta"/>
 
-# =========================================================
-# 9. PORTADA
-# =========================================================
+            <rect x="355" y="220" width="38" height="38"
+                  class="ventana"/>
 
-st.markdown("""
-<div class="hero">
+            <rect x="485" y="220" width="38" height="38"
+                  class="ventana"/>
 
-    <div class="subtitulo" style="color:#e3f2d8;">
-        TECNOLOGÍA PARA EL CAMPO
-    </div>
+            <path d="M440 255 V335"
+                  stroke="#d8ad77" stroke-width="4"/>
+        </g>
 
-    <h1>GranjaConecta 🌾</h1>
+        <!-- GRANERO IZQUIERDO -->
+        <g>
+            <rect x="125" y="245" width="130" height="90"
+                  class="granero"/>
 
-    <p>
-        Una granja inteligente que conecta tecnología,
-        monitoreo y automatización para facilitar el
-        cuidado de los animales y sus espacios.
-    </p>
+            <path d="M105 250 L190 190 L275 250 Z"
+                  class="techo"/>
+
+            <rect x="175" y="285" width="35" height="50"
+                  class="puerta"/>
+
+            <rect x="140" y="265" width="24" height="24"
+                  class="ventana"/>
+        </g>
+
+        <!-- GRANERO DERECHO -->
+        <g>
+            <rect x="690" y="245" width="135" height="90"
+                  class="granero"/>
+
+            <path d="M670 250 L757 190 L845 250 Z"
+                  class="techo"/>
+
+            <rect x="740" y="285" width="35" height="50"
+                  class="puerta"/>
+
+            <rect x="710" y="265" width="24" height="24"
+                  class="ventana"/>
+        </g>
+
+        <!-- CERCA -->
+        <path d="M0 355 H1000 M0 380 H1000"
+              class="cerca"/>
+
+        <g stroke="#e8d8b5" stroke-width="9">
+            <path d="M100 340 V400"/>
+            <path d="M240 340 V400"/>
+            <path d="M380 340 V400"/>
+            <path d="M520 340 V400"/>
+            <path d="M660 340 V400"/>
+            <path d="M800 340 V400"/>
+            <path d="M940 340 V400"/>
+        </g>
+
+        <!-- ANIMALES -->
+        <g font-size="35">
+            <text x="265" y="355">🐄</text>
+            <text x="560" y="355">🐑</text>
+            <text x="620" y="385">🐔</text>
+            <text x="840" y="355">🐄</text>
+            <text x="170" y="395">🐓</text>
+        </g>
+
+        <!-- FLORES -->
+        <g font-size="22">
+            <text x="35" y="330">🌼</text>
+            <text x="285" y="410">🌸</text>
+            <text x="680" y="420">🌼</text>
+            <text x="970" y="330">🌻</text>
+        </g>
+
+    </svg>
 
 </div>
-""", unsafe_allow_html=True)
+
+</body>
+</html>
+"""
 
 
-st.write("")
-
-
-# =========================================================
-# 10. PRESENTACIÓN
-# =========================================================
-
-st.markdown(
-    '<div class="subtitulo">BIENVENIDO A TU GRANJA</div>',
-    unsafe_allow_html=True
-)
-
-st.markdown("## Una granja más conectada e inteligente")
-
-st.markdown("""
-GranjaConecta permite visualizar y supervisar diferentes
-espacios de una granja desde una sola plataforma.
-
-Consulta las condiciones ambientales, revisa el estado
-del corral y controla el funcionamiento del bebedero.
-""")
-
-
-st.write("")
-
-
-# =========================================================
-# 11. MONITOREO AMBIENTAL DE LA GRANJA
-# =========================================================
+# ==================================================
+# MOSTRAR MONITOREO Y ACTUALIZAR DATOS
+# ==================================================
 
 @st.fragment(run_every="2s")
-def mostrar_monitoreo():
+def mostrar_granja_conectada():
 
-    procesar_mensajes()
+    leer_datos_mqtt()
 
-    temperatura = st.session_state.telemetria_granja[
+    temperatura = st.session_state.datos_ambientales[
         "temperatura"
     ]
 
-    humedad = st.session_state.telemetria_granja[
+    humedad = st.session_state.datos_ambientales[
         "humedad"
     ]
 
-    estado = obtener_estado_granja(
-        temperatura,
-        humedad
-    )
+    estado = obtener_estado(temperatura, humedad)
 
     st.markdown(
-        '<div class="subtitulo">MONITOREO EN TIEMPO REAL</div>',
+        """
+        <div class="section-title">
+            🌤️ Así se encuentra tu granja
+        </div>
+
+        <div class="section-description">
+            Visualiza las condiciones ambientales recibidas
+            desde los sensores conectados a Wokwi.
+        </div>
+        """,
         unsafe_allow_html=True
     )
 
-    st.markdown("## 🌤️ Así se encuentra tu granja")
-
-    st.markdown("""
-    La ilustración cambia de apariencia según las lecturas
-    de temperatura y humedad recibidas desde el sensor.
-    """)
-
-    # ESTADO DE CONEXIÓN
-
-    if conexion_mqtt["conectado"]:
-        st.success("🟢 Conexión MQTT activa. Recibiendo información del ESP32.")
+    if estado_mqtt["conectado"]:
+        st.success("🟢 Conexión MQTT activa. Recibiendo datos.")
     else:
-        st.warning("🟡 Esperando conexión con el ESP32 de Wokwi.")
+        st.warning("🟡 Esperando conexión con Wokwi.")
 
-        if conexion_mqtt["error"]:
-            st.caption(conexion_mqtt["error"])
+        if estado_mqtt["error"]:
+            st.caption(estado_mqtt["error"])
 
     # ILUSTRACIÓN
-
-    html_granja = crear_ilustracion(estado)
-
     components.html(
-        html_granja,
+        ilustracion_granja(estado),
         height=440,
         scrolling=False
     )
 
-    st.write("")
-
     # INDICADORES
-
     col1, col2 = st.columns(2)
-
-    estado_temperatura = clasificar_valor(temperatura)
-    estado_humedad = clasificar_valor(humedad)
 
     with col1:
 
-        if temperatura is None:
-            valor_temperatura = "--"
-        else:
-            valor_temperatura = f"{temperatura:.1f} °C"
+        valor = (
+            "--"
+            if temperatura is None
+            else f"{temperatura:.1f} °C"
+        )
 
-        st.markdown(
-            f"""
-            <div class="metrica">
-                <div class="metrica-titulo">🌡️ TEMPERATURA</div>
-                <div class="metrica-valor">{valor_temperatura}</div>
-                <div class="estado">{estado_temperatura}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
+        st.metric(
+            "🌡️ Temperatura",
+            valor,
+            clasificar_sensor(temperatura)
         )
 
     with col2:
 
-        if humedad is None:
-            valor_humedad = "--"
-        else:
-            valor_humedad = f"{humedad:.1f} %"
-
-        st.markdown(
-            f"""
-            <div class="metrica">
-                <div class="metrica-titulo">💧 HUMEDAD</div>
-                <div class="metrica-valor">{valor_humedad}</div>
-                <div class="estado">{estado_humedad}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
+        valor = (
+            "--"
+            if humedad is None
+            else f"{humedad:.1f} %"
         )
 
-    st.write("")
+        st.metric(
+            "💧 Humedad",
+            valor,
+            clasificar_sensor(humedad)
+        )
 
     if estado == "espera":
         st.info(
-            "Todavía no se han recibido lecturas. "
-            "Inicia la simulación en Wokwi y espera los datos."
+            "Inicia la simulación de Wokwi para recibir "
+            "los primeros datos ambientales."
         )
 
     elif estado == "bajo":
         st.info(
-            "La granja muestra tonos azules porque al menos "
-            "una de las lecturas está por debajo de 20."
+            "❄️ La granja cambia a tonos azules porque "
+            "se detectó una lectura inferior a 20."
         )
 
     elif estado == "alto":
         st.warning(
-            "La granja muestra tonos amarillos porque al menos "
-            "una de las lecturas es igual o superior a 35."
+            "☀️ La granja cambia a tonos amarillos porque "
+            "se detectó una lectura igual o superior a 35."
         )
 
     else:
         st.success(
-            "La granja muestra tonos verdes porque las lecturas "
-            "recibidas se encuentran entre 20 y menos de 35."
+            "🌿 La granja mantiene sus colores verdes "
+            "porque las lecturas están dentro del rango normal."
         )
 
 
-mostrar_monitoreo()
+# ==================================================
+# SECCIÓN NUEVA: GRANJA CONECTADA
+# ==================================================
+
+mostrar_granja_conectada()
 
 
-st.write("")
-st.markdown("---")
+# ==================================================
+# TARJETAS: HTML EN COMPONENTES INDEPENDIENTES
+# ==================================================
 
+def mostrar_tarjeta(icono, titulo, descripcion):
+    html_tarjeta = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="UTF-8">
+    <style>
+    * {{ box-sizing: border-box; }}
+    html, body {{
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        font-family: Arial, Helvetica, sans-serif;
+    }}
+    .card-box {{
+        background: linear-gradient(145deg, #174a32 0%, #246642 100%);
+        border-radius: 20px;
+        padding: 28px;
+        min-height: 225px;
+        border: 1px solid rgba(255,255,255,.12);
+        box-shadow: 0 8px 22px rgba(20,65,42,.10);
+    }}
+    .card-icon {{
+        font-size: 38px;
+        margin-bottom: 14px;
+    }}
+    .card-title {{
+        color: white;
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 12px;
+    }}
+    .card-description {{
+        color: #e1f0e4;
+        font-size: 14px;
+        line-height: 1.6;
+        min-height: 65px;
+    }}
+    </style>
+    </head>
+    <body>
+        <div class="card-box">
+            <div class="card-icon">{icono}</div>
+            <div class="card-title">{titulo}</div>
+            <div class="card-description">{descripcion}</div>
+        </div>
+    </body>
+    </html>
+    """
+    components.html(html_tarjeta, height=245, scrolling=False)
 
-# =========================================================
-# 12. TARJETAS DE FUNCIONALIDADES
-# =========================================================
-
-st.markdown(
-    '<div class="subtitulo">EXPLORA LA PLATAFORMA</div>',
-    unsafe_allow_html=True
-)
-
-st.markdown("## Conoce los espacios de GranjaConecta")
 
 col1, col2 = st.columns(2, gap="large")
 
-
 with col1:
-
-    st.markdown("""
-    <div class="tarjeta">
-
-        <div style="font-size:42px;">🐄</div>
-
-        <h3>Corral inteligente</h3>
-
-        <p>
-            Supervisa las condiciones del corral, consulta
-            información ambiental y utiliza las funciones
-            de monitoreo y control disponibles.
-        </p>
-
-    </div>
-    """, unsafe_allow_html=True)
+    mostrar_tarjeta(
+        "🐄",
+        "Corral inteligente",
+        "Controla el acceso del corral, reconoce gestos "
+        "y regula la ventilación para favorecer el "
+        "bienestar de los animales."
+    )
 
     if st.button(
-        "Ingresar al corral →",
-        key="ir_corral",
+        "Ingresar al Corral →",
+        key="boton_corral",
         use_container_width=True
     ):
         st.switch_page("pages/2_Corral.py")
 
 
 with col2:
-
-    st.markdown("""
-    <div class="tarjeta">
-
-        <div style="font-size:42px;">💧</div>
-
-        <h3>Bebedero inteligente</h3>
-
-        <p>
-            Consulta el nivel de agua, identifica cuándo
-            necesita llenarse y utiliza las funciones
-            de apertura y cierre de la válvula.
-        </p>
-
-    </div>
-    """, unsafe_allow_html=True)
+    mostrar_tarjeta(
+        "💧",
+        "Bebedero inteligente",
+        "Supervisa el nivel de agua y las condiciones "
+        "ambientales, y controla el suministro mediante "
+        "comandos de voz o texto."
+    )
 
     if st.button(
-        "Ingresar al bebedero →",
-        key="ir_bebedero",
+        "Ingresar al Bebedero →",
+        key="boton_bebedero",
         use_container_width=True
     ):
         st.switch_page("pages/1_Bebedero.py")
 
 
-# =========================================================
-# 13. PIE DE PÁGINA
-# =========================================================
+# ==================================================
+# PIE DE PÁGINA
+# ==================================================
 
-st.write("")
-st.write("")
-
-st.markdown("""
-<div class="pie">
-
-    🌾 <b>GranjaConecta</b>
-
-    <br><br>
-
-    Tecnología y monitoreo para una granja inteligente.
-
-    <br>
-
-    © 2026 GranjaConecta
-
-</div>
-""", unsafe_allow_html=True)
+st.markdown(
+    """
+    <div class="footer-line"></div>
+    <div class="footer-text">
+        GranjaConecta · Tecnología para el campo
+        <br>
+        Monitoreo inteligente y bienestar animal
+    </div>
+    """,
+    unsafe_allow_html=True
+)
