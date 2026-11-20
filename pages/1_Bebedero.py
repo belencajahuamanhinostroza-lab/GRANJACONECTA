@@ -1,5 +1,4 @@
-
-import streamlit as st
+ok y en git hub import streamlit as st
 import streamlit.components.v1 as components
 import paho.mqtt.client as mqtt
 import json
@@ -8,7 +7,6 @@ import re
 import unicodedata
 import queue
 import uuid
-import html
 
 import speech_recognition as sr
 from streamlit_mic_recorder import mic_recorder
@@ -28,22 +26,6 @@ st.set_page_config(
 BROKER = "broker.mqttdashboard.com"
 PUERTO = 1883
 TOPICO = "granjaconecta"
-
-# Calibración del sensor HC-SR04
-DISTANCIA_LLENO = 10.0
-DISTANCIA_VACIO = 40.0
-
-NIVEL_CASI_LLENO = 89.0
-NIVEL_AGUA_BAJA = 25.0
-
-
-def calcular_nivel(distancia):
-    porcentaje = (
-        (DISTANCIA_VACIO - distancia)
-        / (DISTANCIA_VACIO - DISTANCIA_LLENO)
-    ) * 100
-
-    return max(0.0, min(100.0, porcentaje))
 
 
 # =========================================================
@@ -140,7 +122,7 @@ if "distancia_agua" not in st.session_state:
     st.session_state.distancia_agua = None
 
 if "lectura_agua_valida" not in st.session_state:
-    st.session_state.lectura_agua_valida = False
+    st.session_state.lectura_agua_valida = True
 
 if "estado_agua" not in st.session_state:
     st.session_state.estado_agua = "SIN DATOS"
@@ -170,7 +152,10 @@ if "historial" not in st.session_state:
 def normalizar(texto):
     texto = texto.lower().strip()
 
-    texto = unicodedata.normalize("NFD", texto)
+    texto = unicodedata.normalize(
+        "NFD",
+        texto
+    )
 
     texto = "".join(
         c for c in texto
@@ -192,6 +177,7 @@ def iniciar_mqtt():
 
     mensajes = queue.Queue()
 
+    # ID único para evitar que otra sesión desconecte este cliente
     client_id = "GRANJACONECTA_BEBEDERO_" + uuid.uuid4().hex[:10]
 
     cliente = mqtt.Client(
@@ -213,23 +199,11 @@ def iniciar_mqtt():
             resultado, mid = client.subscribe(TOPICO, qos=0)
 
             if resultado == mqtt.MQTT_ERR_SUCCESS:
-                mensajes.put((
-                    "info",
-                    "Suscripción al tópico realizada: " + TOPICO,
-                    None
-                ))
+                mensajes.put(("info", "Suscripción al tópico realizada: " + TOPICO, None))
             else:
-                mensajes.put((
-                    "error",
-                    "Conectó al broker, pero no pudo suscribirse al tópico.",
-                    None
-                ))
+                mensajes.put(("error", "Conectó al broker, pero no pudo suscribirse al tópico.", None))
         else:
-            mensajes.put((
-                "error",
-                "El broker rechazó la conexión MQTT: " + str(reason_code),
-                None
-            ))
+            mensajes.put(("error", "El broker rechazó la conexión MQTT: " + str(reason_code), None))
 
     def al_desconectar(
         client,
@@ -248,18 +222,10 @@ def iniciar_mqtt():
             mensajes.put(("mensaje", datos, None))
 
         except Exception as error:
-            mensajes.put((
-                "error",
-                "Mensaje MQTT no válido: " + str(error),
-                None
-            ))
+            mensajes.put(("error", "Mensaje MQTT no válido: " + str(error), None))
 
     def al_fallar_conexion(client, userdata):
-        mensajes.put((
-            "error",
-            "No se pudo establecer conexión con el servidor MQTT.",
-            None
-        ))
+        mensajes.put(("error", "No se pudo establecer conexión con el servidor MQTT.", None))
 
     cliente.on_connect = al_conectar
     cliente.on_disconnect = al_desconectar
@@ -278,18 +244,12 @@ def iniciar_mqtt():
         cliente.loop_start()
 
     except Exception as error:
-        mensajes.put((
-            "error",
-            "Error al iniciar MQTT: " + str(error),
-            None
-        ))
+        mensajes.put(("error", "Error al iniciar MQTT: " + str(error), None))
 
     return cliente, mensajes
 
 
 cliente_mqtt, cola_mqtt = iniciar_mqtt()
-
-
 # =========================================================
 # 6. LEER MENSAJES MQTT
 # =========================================================
@@ -311,36 +271,19 @@ while not cola_mqtt.empty():
 
             datos = datos_mqtt.get("datos", {})
 
-            # IMPORTANTE:
-            # Leer la distancia REAL del HC-SR04.
-            distancia = datos.get("distanciaHC", None)
-
-            # Validez de la lectura del sensor.
-            lectura_valida = datos.get(
-                "lecturaHCValida",
-                datos.get("lecturaAguaValida", False)
+            nivel = datos.get(
+                "nivelAgua",
+                datos.get("agua", None)
             )
 
-            st.session_state.lectura_agua_valida = bool(
-                lectura_valida
-            )
-
-            if lectura_valida and distancia is not None:
-
+            if nivel is not None:
                 try:
-                    distancia = float(distancia)
-
-                    if 0 <= distancia <= 500:
-
-                        st.session_state.distancia_agua = distancia
-
-                        # El porcentaje se calcula desde la distancia real.
-                        st.session_state.nivel_agua = calcular_nivel(
-                            distancia
-                        )
-
+                    st.session_state.nivel_agua = max(
+                        0.0,
+                        min(100.0, float(nivel))
+                    )
                 except (TypeError, ValueError):
-                    st.session_state.lectura_agua_valida = False
+                    pass
 
             st.session_state.valvula = datos.get(
                 "valvula",
@@ -350,6 +293,16 @@ while not cola_mqtt.empty():
             st.session_state.vaciando = datos.get(
                 "vaciando",
                 st.session_state.vaciando
+            )
+
+            st.session_state.distancia_agua = datos.get(
+                "distancia",
+                st.session_state.distancia_agua
+            )
+
+            st.session_state.lectura_agua_valida = datos.get(
+                "lecturaAguaValida",
+                st.session_state.lectura_agua_valida
             )
 
             st.session_state.estado_agua = datos.get(
@@ -374,20 +327,17 @@ while not cola_mqtt.empty():
             "Error MQTT: " + str(contenido)
         )
 
-
+# El estado real del cliente es la referencia principal.
 st.session_state.mqtt_conectado = cliente_mqtt.is_connected()
-
-
 # =========================================================
 # 7. ENVIAR COMANDOS AL ESP32
 # =========================================================
 
 def enviar_comando(comando):
 
+    # No depender de una variable de sesión que puede estar desactualizada.
     if not cliente_mqtt.is_connected():
-
         st.session_state.mqtt_conectado = False
-
         return False, (
             "El cliente MQTT todavía no está conectado. "
             "Espera unos segundos e inténtalo nuevamente."
@@ -399,7 +349,6 @@ def enviar_comando(comando):
     }
 
     try:
-
         resultado = cliente_mqtt.publish(
             TOPICO,
             json.dumps(mensaje, ensure_ascii=False),
@@ -409,13 +358,9 @@ def enviar_comando(comando):
         if resultado.rc == mqtt.MQTT_ERR_SUCCESS:
             return True, "Orden enviada al tópico MQTT: " + comando
 
-        return False, (
-            "No se pudo publicar la orden MQTT. Código: "
-            + str(resultado.rc)
-        )
+        return False, "No se pudo publicar la orden MQTT. Código: " + str(resultado.rc)
 
     except Exception as error:
-
         return False, "Error al enviar la orden: " + str(error)
 
 
@@ -426,51 +371,40 @@ def enviar_comando(comando):
 def consultar_nivel():
 
     nivel = st.session_state.nivel_agua
-    distancia = st.session_state.distancia_agua
 
     if not st.session_state.lectura_agua_valida:
-
         return (
             "No puedo confirmar el nivel de agua porque "
             "la lectura del sensor no es válida."
         )
 
-    respuesta = (
-        f"El bebedero tiene {nivel:.0f}% de agua. "
-    )
-
-    if distancia is not None:
-        respuesta += f"El sensor detecta una distancia de {distancia:.1f} centímetros. "
-
     if nivel <= 10:
-
-        respuesta += (
+        return (
+            f"El bebedero tiene {nivel:.0f}% de agua. "
             "Está prácticamente vacío. Es necesario rellenarlo."
         )
 
-    elif nivel <= NIVEL_AGUA_BAJA:
-
-        respuesta += (
+    if nivel <= 25:
+        return (
+            f"El bebedero tiene {nivel:.0f}% de agua. "
             "El nivel es bajo. Recomiendo rellenarlo pronto."
         )
 
-    elif nivel >= NIVEL_CASI_LLENO:
-
-        respuesta += (
-            "Está casi lleno. Se debe evitar que el agua rebalse."
+    if nivel >= 90:
+        return (
+            f"El bebedero tiene {nivel:.0f}% de agua. "
+            "Está lleno o muy cerca de su capacidad máxima."
         )
 
-    else:
-
-        respuesta += (
-            "El nivel es suficiente por el momento."
-        )
-
-    return respuesta
+    return (
+        f"El bebedero tiene {nivel:.0f}% de agua. "
+        "El nivel es suficiente por el momento."
+    )
 
 
 def responder_orden_informativa(texto):
 
+    # Informar el nivel o porcentaje de agua
     if any(frase in texto for frase in [
         "indica el nivel de agua",
         "informa el nivel de agua",
@@ -483,6 +417,7 @@ def responder_orden_informativa(texto):
     ]):
         return consultar_nivel()
 
+    # Informar si hace falta rellenar
     if any(frase in texto for frase in [
         "indica si necesita agua",
         "informa si necesita agua",
@@ -492,7 +427,6 @@ def responder_orden_informativa(texto):
         "revisa el nivel del bebedero",
         "indica si hay que rellenar"
     ]):
-
         nivel = st.session_state.nivel_agua
 
         if not st.session_state.lectura_agua_valida:
@@ -501,7 +435,7 @@ def responder_orden_informativa(texto):
                 "la lectura del sensor no es válida."
             )
 
-        if nivel <= NIVEL_AGUA_BAJA:
+        if nivel <= 25:
             return (
                 f"El bebedero necesita agua. "
                 f"Actualmente tiene {nivel:.0f}% de agua."
@@ -512,6 +446,7 @@ def responder_orden_informativa(texto):
             f"Actualmente tiene {nivel:.0f}%."
         )
 
+    # Informar el estado de la válvula
     if any(frase in texto for frase in [
         "indica el estado de la valvula",
         "informa el estado de la valvula",
@@ -519,13 +454,13 @@ def responder_orden_informativa(texto):
         "revisa la valvula",
         "lee el estado de la valvula"
     ]):
-
         return (
             "El estado actual de la válvula es "
             + str(st.session_state.valvula)
             + "."
         )
 
+    # Informar el estado general del bebedero
     if any(frase in texto for frase in [
         "informa el estado del bebedero",
         "indica el estado del bebedero",
@@ -533,15 +468,7 @@ def responder_orden_informativa(texto):
         "muestra el estado del bebedero",
         "lee el estado del bebedero"
     ]):
-
-        if not st.session_state.lectura_agua_valida:
-            return (
-                "El sensor no está proporcionando una lectura válida. "
-                "No puedo confirmar el nivel actual del bebedero."
-            )
-
         nivel = st.session_state.nivel_agua
-
         return (
             f"El bebedero tiene {nivel:.0f}% de agua. "
             f"La válvula está {st.session_state.valvula}."
@@ -558,12 +485,13 @@ def procesar_orden_voz(frase):
 
     texto = normalizar(frase)
 
+    # Primero reconocer las órdenes informativas
     respuesta_informativa = responder_orden_informativa(texto)
 
     if respuesta_informativa:
-
         respuesta = respuesta_informativa
 
+    # Abrir válvula
     elif any(palabra in texto for palabra in [
         "abre la valvula",
         "abrir la valvula",
@@ -572,9 +500,9 @@ def procesar_orden_voz(frase):
         "abre el paso del agua",
         "deja pasar el agua"
     ]):
-
         ok, respuesta = enviar_comando("VALVULA_ABRIR")
 
+    # Cerrar válvula
     elif any(palabra in texto for palabra in [
         "cierra la valvula",
         "cerrar la valvula",
@@ -584,9 +512,9 @@ def procesar_orden_voz(frase):
         "detener el agua",
         "para el agua"
     ]):
-
         ok, respuesta = enviar_comando("VALVULA_CERRAR")
 
+    # Vaciar bebedero
     elif any(palabra in texto for palabra in [
         "vacia el bebedero",
         "vaciar el bebedero",
@@ -594,9 +522,9 @@ def procesar_orden_voz(frase):
         "vacia el agua",
         "saca el agua"
     ]):
-
         ok, respuesta = enviar_comando("BEBEDERO_VACIAR")
 
+    # Llenar bebedero
     elif any(palabra in texto for palabra in [
         "llena el bebedero",
         "llenar el bebedero",
@@ -607,11 +535,9 @@ def procesar_orden_voz(frase):
         "llena el agua",
         "llena bebedero"
     ]):
-
         ok, respuesta = enviar_comando("BEBEDERO_LLENO")
 
     else:
-
         respuesta = (
             "No he reconocido la orden. Puedes decir: "
             "indica el nivel de agua, informa el estado del bebedero, "
@@ -647,6 +573,7 @@ st.markdown(
 # 11. ESTADO DE CONEXIÓN
 # =========================================================
 
+# Consultar directamente el cliente MQTT en cada actualización de Streamlit.
 mqtt_activo = cliente_mqtt.is_connected()
 st.session_state.mqtt_conectado = mqtt_activo
 
@@ -670,11 +597,6 @@ else:
 # =========================================================
 
 nivel_agua = st.session_state.nivel_agua
-
-if st.session_state.lectura_agua_valida:
-    nivel_grafico = nivel_agua
-else:
-    nivel_grafico = 0
 
 components.html(f"""
 <div style="
@@ -722,7 +644,7 @@ components.html(f"""
             bottom:0;
             left:0;
             width:100%;
-            height:{nivel_grafico:.1f}%;
+            height:{nivel_agua:.1f}%;
             background:#42A5D5;
             transition:height 0.8s ease;
             border-radius:0 0 20px 20px;
@@ -755,7 +677,7 @@ components.html(f"""
             z-index:4;
             text-shadow:0 1px 3px rgba(255,255,255,0.65);
         ">
-            {"{:.0f}%".format(nivel_agua) if st.session_state.lectura_agua_valida else "SIN LECTURA"}
+            {nivel_agua:.0f}%
         </div>
     </div>
 
@@ -784,28 +706,22 @@ components.html(f"""
 
 st.markdown("### 📊 Información del bebedero")
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3 = st.columns(3)
 
 with col1:
-
-    valor_nivel = (
-        f"{nivel_agua:.0f}%"
-        if st.session_state.lectura_agua_valida
-        else "--"
-    )
 
     st.markdown(f"""
     <div class="bloque-info">
         <div class="dato-titulo">NIVEL DE AGUA</div>
-        <div class="dato-valor">{valor_nivel}</div>
+        <div class="dato-valor">{nivel_agua:.0f}%</div>
     </div>
     """, unsafe_allow_html=True)
 
 with col2:
 
-    estado_valvula = html.escape(
-        str(st.session_state.valvula).upper()
-    )
+    estado_valvula = str(
+        st.session_state.valvula
+    ).upper()
 
     st.markdown(f"""
     <div class="bloque-info">
@@ -829,26 +745,6 @@ with col3:
         <div class="dato-titulo">PROCESO DE VACIADO</div>
         <div class="dato-valor" style="font-size:20px;">
             {estado_vaciado}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col4:
-
-    distancia = st.session_state.distancia_agua
-
-    valor_distancia = (
-        f"{distancia:.1f} cm"
-        if st.session_state.lectura_agua_valida
-        and distancia is not None
-        else "--"
-    )
-
-    st.markdown(f"""
-    <div class="bloque-info">
-        <div class="dato-titulo">DISTANCIA DEL SENSOR</div>
-        <div class="dato-valor" style="font-size:22px;">
-            {valor_distancia}
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -938,7 +834,7 @@ if st.session_state.ultima_transcripcion:
         f"""
         <div class="respuesta">
             <b>Tu orden:</b><br>
-            {html.escape(st.session_state.ultima_transcripcion)}
+            {st.session_state.ultima_transcripcion}
         </div>
         """,
         unsafe_allow_html=True
@@ -948,7 +844,7 @@ st.markdown(
     f"""
     <div class="respuesta">
         <b>GranjaConecta:</b><br>
-        {html.escape(st.session_state.respuesta)}
+        {st.session_state.respuesta}
     </div>
     """,
     unsafe_allow_html=True
@@ -963,7 +859,6 @@ st.markdown("---")
 st.markdown("### 🔔 Alertas del bebedero")
 
 nivel = st.session_state.nivel_agua
-distancia = st.session_state.distancia_agua
 
 if not st.session_state.mqtt_conectado:
 
@@ -978,27 +873,8 @@ if not st.session_state.lectura_agua_valida:
 
     st.markdown("""
     <div class="alerta">
-        ⚠️ La lectura del sensor HC-SR04 no es válida.
+        ⚠️ La lectura del nivel de agua no es válida.
         Revisa el sensor y sus conexiones.
-    </div>
-    """, unsafe_allow_html=True)
-
-elif distancia is not None and distancia < DISTANCIA_LLENO:
-
-    st.markdown("""
-    <div class="alerta">
-        🚨 El sensor detecta una distancia menor a la referencia
-        de llenado. Revisa el nivel para evitar un posible rebose.
-    </div>
-    """, unsafe_allow_html=True)
-
-elif nivel >= NIVEL_CASI_LLENO:
-
-    st.markdown("""
-    <div class="alerta">
-        🚨 El bebedero está al 89% o más.
-        Está cerca de rebalsar. La válvula debe cerrarse para evitar
-        que siga entrando agua.
     </div>
     """, unsafe_allow_html=True)
 
@@ -1011,7 +887,7 @@ elif nivel <= 10:
     </div>
     """, unsafe_allow_html=True)
 
-elif nivel <= NIVEL_AGUA_BAJA:
+elif nivel <= 25:
 
     st.markdown("""
     <div class="alerta">
@@ -1019,11 +895,13 @@ elif nivel <= NIVEL_AGUA_BAJA:
     </div>
     """, unsafe_allow_html=True)
 
+elif nivel >= 90:
+
+    st.success("💧 El bebedero está lleno o cerca de su capacidad máxima.")
+
 else:
 
-    st.success(
-        "✅ El nivel de agua se encuentra dentro de un rango adecuado."
-    )
+    st.success("✅ El nivel de agua se encuentra dentro de un rango adecuado.")
 
 
 # =========================================================
