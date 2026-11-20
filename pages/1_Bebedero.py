@@ -351,7 +351,7 @@ def enviar_comando(comando):
 
 
 # =========================================================
-# 8. RESPUESTAS SOBRE EL NIVEL DE AGUA
+# 8. RESPUESTAS A ÓRDENES INFORMATIVAS
 # =========================================================
 
 def consultar_nivel():
@@ -388,57 +388,76 @@ def consultar_nivel():
     )
 
 
-def responder_consulta(texto):
+def responder_orden_informativa(texto):
 
-    if any(
-        palabra in texto
-        for palabra in [
-            "porcentaje",
-            "nivel de agua",
-            "cuanta agua",
-            "cuanto tiene",
-            "como esta el agua",
-            "estado del agua"
-        ]
-    ):
+    # Informar el nivel o porcentaje de agua
+    if any(frase in texto for frase in [
+        "indica el nivel de agua",
+        "informa el nivel de agua",
+        "dime el nivel de agua",
+        "muestra el nivel de agua",
+        "indica el porcentaje de agua",
+        "informa el porcentaje de agua",
+        "muestra el porcentaje de agua",
+        "lee el nivel de agua"
+    ]):
         return consultar_nivel()
 
-    if any(
-        frase in texto
-        for frase in [
-            "cuando rellenar",
-            "cuando debo rellenar",
-            "necesita agua",
-            "necesita rellenar",
-            "debo llenar"
-        ]
-    ):
+    # Informar si hace falta rellenar
+    if any(frase in texto for frase in [
+        "indica si necesita agua",
+        "informa si necesita agua",
+        "revisa si necesita agua",
+        "indica si debo rellenar",
+        "informa si debo rellenar",
+        "revisa el nivel del bebedero",
+        "indica si hay que rellenar"
+    ]):
         nivel = st.session_state.nivel_agua
+
+        if not st.session_state.lectura_agua_valida:
+            return (
+                "No puedo confirmar si necesita agua porque "
+                "la lectura del sensor no es válida."
+            )
 
         if nivel <= 25:
             return (
-                f"Debes rellenar el bebedero pronto. "
+                f"El bebedero necesita agua. "
                 f"Actualmente tiene {nivel:.0f}% de agua."
             )
 
         return (
-            f"No es necesario rellenarlo todavía. "
-            f"Actualmente tiene {nivel:.0f}% de agua."
+            f"El bebedero tiene suficiente agua. "
+            f"Actualmente tiene {nivel:.0f}%."
         )
 
-    if any(
-        frase in texto
-        for frase in [
-            "estado de la valvula",
-            "como esta la valvula",
-            "valvula esta abierta",
-            "valvula esta cerrada"
-        ]
-    ):
+    # Informar el estado de la válvula
+    if any(frase in texto for frase in [
+        "indica el estado de la valvula",
+        "informa el estado de la valvula",
+        "muestra el estado de la valvula",
+        "revisa la valvula",
+        "lee el estado de la valvula"
+    ]):
         return (
-            "El estado actual de la válvula es: "
+            "El estado actual de la válvula es "
             + str(st.session_state.valvula)
             + "."
+        )
+
+    # Informar el estado general del bebedero
+    if any(frase in texto for frase in [
+        "informa el estado del bebedero",
+        "indica el estado del bebedero",
+        "revisa el bebedero",
+        "muestra el estado del bebedero",
+        "lee el estado del bebedero"
+    ]):
+        nivel = st.session_state.nivel_agua
+        return (
+            f"El bebedero tiene {nivel:.0f}% de agua. "
+            f"La válvula está {st.session_state.valvula}."
         )
 
     return None
@@ -452,95 +471,65 @@ def procesar_orden_voz(frase):
 
     texto = normalizar(frase)
 
-    # Primero comprobar si es una pregunta
-    respuesta_consulta = responder_consulta(texto)
+    # Primero reconocer las órdenes informativas
+    respuesta_informativa = responder_orden_informativa(texto)
 
-    if respuesta_consulta:
-
-        st.session_state.respuesta = respuesta_consulta
-
-        st.session_state.historial.append(
-            "Tú: " + frase
-        )
-
-        st.session_state.historial.append(
-            "GranjaConecta: " + respuesta_consulta
-        )
-
-        return
+    if respuesta_informativa:
+        respuesta = respuesta_informativa
 
     # Abrir válvula
-    if any(
-        frase in texto
-        for frase in [
-            "abre la valvula",
-            "abrir la valvula",
-            "abre valvula",
-            "abrir valvula",
-            "abre el paso del agua",
-            "deja pasar el agua"
-        ]
-    ):
-
+    elif any(palabra in texto for palabra in [
+        "abre la valvula",
+        "abrir la valvula",
+        "abre valvula",
+        "abrir valvula",
+        "abre el paso del agua",
+        "deja pasar el agua"
+    ]):
         ok, respuesta = enviar_comando("VALVULA_ABRIR")
 
     # Cerrar válvula
-    elif any(
-        frase in texto
-        for frase in [
-            "cierra la valvula",
-            "cerrar la valvula",
-            "cierra valvula",
-            "cerrar valvula",
-            "deten el agua",
-            "detener el agua",
-            "para el agua"
-        ]
-    ):
-
+    elif any(palabra in texto for palabra in [
+        "cierra la valvula",
+        "cerrar la valvula",
+        "cierra valvula",
+        "cerrar valvula",
+        "deten el agua",
+        "detener el agua",
+        "para el agua"
+    ]):
         ok, respuesta = enviar_comando("VALVULA_CERRAR")
 
     # Vaciar bebedero
-    elif any(
-        frase in texto
-        for frase in [
-            "vacia el bebedero",
-            "vaciar el bebedero",
-            "vacia bebedero",
-            "vacia el agua",
-            "saca el agua"
-        ]
-    ):
-
+    elif any(palabra in texto for palabra in [
+        "vacia el bebedero",
+        "vaciar el bebedero",
+        "vacia bebedero",
+        "vacia el agua",
+        "saca el agua"
+    ]):
         ok, respuesta = enviar_comando("BEBEDERO_VACIAR")
 
     # Llenar bebedero
-    elif any(
-        frase in texto
-        for frase in [
-            "llena el bebedero",
-            "llenar el bebedero",
-            "rellena el bebedero",
-            "rellenar el bebedero",
-            "dejalo lleno",
-            "dejala llena",
-            "llena el agua",
-            "llena bebedero"
-        ]
-    ):
-
+    elif any(palabra in texto for palabra in [
+        "llena el bebedero",
+        "llenar el bebedero",
+        "rellena el bebedero",
+        "rellenar el bebedero",
+        "dejalo lleno",
+        "dejala llena",
+        "llena el agua",
+        "llena bebedero"
+    ]):
         ok, respuesta = enviar_comando("BEBEDERO_LLENO")
 
     else:
-
         respuesta = (
-            "No he entendido la orden. Puedes decir: "
-            "abre la válvula, cierra la válvula, "
-            "llena el bebedero, vacía el bebedero "
-            "o pregunta por el porcentaje de agua."
+            "No he reconocido la orden. Puedes decir: "
+            "indica el nivel de agua, informa el estado del bebedero, "
+            "indica si necesita agua, abre la válvula, "
+            "cierra la válvula, llena el bebedero o vacía el bebedero."
         )
-
-        ok = False
 
     st.session_state.respuesta = respuesta
 
@@ -562,7 +551,7 @@ st.subheader("Control inteligente del bebedero")
 
 st.markdown(
     "Controla el suministro de agua de tu granja mediante "
-    "comandos de voz y consulta el nivel del bebedero."
+    "órdenes de voz para conocer el estado y controlar el bebedero."
 )
 
 
@@ -751,8 +740,8 @@ st.markdown("---")
 st.markdown("### 🎙️ Control por voz")
 
 st.write(
-    "Pulsa el micrófono, di tu orden y espera a que "
-    "GranjaConecta la interprete."
+    "Pulsa el micrófono y utiliza órdenes de voz para "
+    "consultar el estado y controlar el bebedero."
 )
 
 audio_voz = mic_recorder(
