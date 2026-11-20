@@ -104,6 +104,15 @@ st.markdown(
         margin-bottom: 25px;
     }
 
+    /* COLOR VERDE OSCURO PARA LOS INDICADORES */
+    [data-testid="stMetric"] label,
+    [data-testid="stMetric"] [data-testid="stMetricLabel"],
+    [data-testid="stMetric"] [data-testid="stMetricValue"],
+    [data-testid="stMetric"] [data-testid="stMetricDelta"],
+    [data-testid="stMetric"] p {
+        color: #17452e !important;
+    }
+
     div.stButton > button {
         background-color: #c6f36a;
         color: #173d29;
@@ -134,15 +143,6 @@ st.markdown(
         color: #789080;
         font-size: 12px;
         padding-bottom: 10px;
-    }
-
-    /* ÚNICO CAMBIO: COLOR VERDE OSCURO EN TEMPERATURA Y HUMEDAD */
-    [data-testid="stMetric"] label,
-    [data-testid="stMetric"] [data-testid="stMetricLabel"],
-    [data-testid="stMetric"] [data-testid="stMetricValue"],
-    [data-testid="stMetric"] [data-testid="stMetricDelta"],
-    [data-testid="stMetric"] p {
-        color: #17452e !important;
     }
 
     @media (max-width: 700px) {
@@ -305,7 +305,7 @@ st.markdown(
 
 
 # ==================================================
-# NUEVO: CONEXIÓN MQTT CON WOKWI
+# CONEXIÓN MQTT CON WOKWI
 # ==================================================
 
 @st.cache_resource
@@ -404,12 +404,21 @@ def leer_datos_mqtt():
         try:
             paquete = json.loads(mensaje)
 
-            # Acepta mensajes con tipo telemetria
-            # y también mensajes que envían los datos directamente.
+            # Acepta mensajes de telemetría
+            # y mensajes que envían los datos directamente.
             if paquete.get("tipo") not in (None, "telemetria"):
                 continue
 
             datos = paquete.get("datos", paquete)
+
+            # Comprobar que la lectura del DHT sea válida.
+            lectura_dht_valida = datos.get(
+                "lecturaDHTValida",
+                True
+            )
+
+            if not lectura_dht_valida:
+                continue
 
             temperatura = datos.get(
                 "temperatura",
@@ -441,36 +450,68 @@ def leer_datos_mqtt():
 
 def obtener_estado(temperatura, humedad):
 
-    valores = [
-        valor
-        for valor in [temperatura, humedad]
-        if valor is not None
-    ]
+    estados = []
 
-    if not valores:
-        return "espera"
+    # Rangos de temperatura
+    if temperatura is not None:
 
-    if any(valor >= 35 for valor in valores):
+        if temperatura < 20:
+            estados.append("bajo")
+
+        elif temperatura >= 35:
+            estados.append("alto")
+
+    # Rangos de humedad
+    if humedad is not None:
+
+        if humedad < 30:
+            estados.append("bajo")
+
+        elif humedad > 70:
+            estados.append("alto")
+
+    if not estados:
+        if temperatura is None and humedad is None:
+            return "espera"
+
+        return "normal"
+
+    # Si existe una condición alta, tiene prioridad visual.
+    if "alto" in estados:
         return "alto"
 
-    if any(valor < 20 for valor in valores):
+    if "bajo" in estados:
         return "bajo"
 
     return "normal"
 
 
-def clasificar_sensor(valor):
+def clasificar_sensor(valor, tipo):
 
     if valor is None:
         return "Sin datos"
 
-    if valor < 20:
-        return "BAJA"
+    if tipo == "temperatura":
 
-    if valor >= 35:
-        return "ALTA"
+        if valor < 20:
+            return "BAJA"
 
-    return "NORMAL"
+        if valor >= 35:
+            return "ALTA"
+
+        return "NORMAL"
+
+    elif tipo == "humedad":
+
+        if valor < 30:
+            return "BAJA"
+
+        if valor > 70:
+            return "ALTA"
+
+        return "NORMAL"
+
+    return "Sin datos"
 
 
 # ==================================================
@@ -483,19 +524,19 @@ def ilustracion_granja(estado):
         "normal": {
             "clase": "normal",
             "titulo": "AMBIENTE ESTABLE",
-            "mensaje": "Las lecturas se encuentran dentro del rango normal.",
+            "mensaje": "Las lecturas se encuentran dentro de los rangos establecidos.",
             "emoji": "🌿"
         },
         "bajo": {
             "clase": "bajo",
             "titulo": "VALOR BAJO DETECTADO",
-            "mensaje": "La temperatura o humedad presenta un valor bajo.",
+            "mensaje": "La temperatura o humedad presenta un valor inferior a su rango establecido.",
             "emoji": "❄️"
         },
         "alto": {
             "clase": "alto",
             "titulo": "VALOR ALTO DETECTADO",
-            "mensaje": "La temperatura o humedad presenta un valor alto.",
+            "mensaje": "La temperatura o humedad supera su rango establecido.",
             "emoji": "☀️"
         },
         "espera": {
@@ -927,7 +968,7 @@ def mostrar_granja_conectada():
         st.metric(
             "🌡️ Temperatura",
             valor,
-            clasificar_sensor(temperatura)
+            clasificar_sensor(temperatura, "temperatura")
         )
 
     with col2:
@@ -941,7 +982,7 @@ def mostrar_granja_conectada():
         st.metric(
             "💧 Humedad",
             valor,
-            clasificar_sensor(humedad)
+            clasificar_sensor(humedad, "humedad")
         )
 
     if estado == "espera":
@@ -953,24 +994,27 @@ def mostrar_granja_conectada():
     elif estado == "bajo":
         st.info(
             "❄️ La granja cambia a tonos azules porque "
-            "se detectó una lectura inferior a 20."
+            "se detectó una temperatura inferior a 20 °C "
+            "o una humedad inferior al 30 %."
         )
 
     elif estado == "alto":
         st.warning(
             "☀️ La granja cambia a tonos amarillos porque "
-            "se detectó una lectura igual o superior a 35."
+            "se detectó una temperatura igual o superior "
+            "a 35 °C o una humedad superior al 70 %."
         )
 
     else:
         st.success(
             "🌿 La granja mantiene sus colores verdes "
-            "porque las lecturas están dentro del rango normal."
+            "porque las lecturas están dentro de los "
+            "rangos establecidos."
         )
 
 
 # ==================================================
-# SECCIÓN NUEVA: GRANJA CONECTADA
+# SECCIÓN: GRANJA CONECTADA
 # ==================================================
 
 mostrar_granja_conectada()
